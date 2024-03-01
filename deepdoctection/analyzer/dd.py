@@ -23,6 +23,7 @@ Module for **deep**doctection analyzer.
 -user factory with a reduced config setting
 """
 
+from ..pipe.acroform import *
 import ast
 import os
 from os import environ
@@ -394,6 +395,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         floating_text_block_categories=cfg.TEXT_ORDERING.FLOATING_TEXT_BLOCK_CATEGORIES,
         include_residual_text_container=cfg.TEXT_ORDERING.INCLUDE_RESIDUAL_TEXT_CONTAINER,
     )
+
     pipe = DoctectionPipe(pipeline_component_list=pipe_component_list, page_parsing_service=page_parsing_service)
 
     return pipe

@@ -34,6 +34,7 @@ packaging==21.3
     # via
     #   deepdoctection (setup.py)
     #   huggingface-hub
+pdfminer
 pillow==10.0.1
     # via deepdoctection (setup.py)
 pyparsing==3.0.7
