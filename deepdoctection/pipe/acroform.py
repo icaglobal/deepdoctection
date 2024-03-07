@@ -1,28 +1,22 @@
+from abc import ABC
+
+from .base import PipelineComponent
+from .registry import pipeline_component_registry
+from ..datapoint.image import Image
+
 from pdfminer.pdfparser import PDFParser
 from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdftypes import resolve1
 import xml.etree.ElementTree as ET
 import re
-import json
 
 
-class AcroFormParsingService:
-    def __init__(self, pdf):
-        parser = PDFParser(pdf)
-        doc = PDFDocument(parser)
-        acroform = resolve1(doc.catalog["AcroForm"])
-        if 'XFA' in acroform.keys():
-            xfa = acroform["XFA"]
-            objs = [resolve1(x).get_data().decode() for n, x in enumerate(xfa) if n % 2 == 1]
-            xstr = "".join(objs)
-            xml_root = ET.fromstring(xstr)
-            print(self.process_xfa_estars(xml_root))
-        elif 'Fields' in acroform.keys():
-            print(self.read_form_fields(acroform))
-        else:
-            pass
+class Resources:
+    def __init__(self):
+        pass
 
-    def read_form_fields(self, acroform):
+    def read_acroform_fields(self, acroform):
+        # reads fields and data from a plain old AcroForm
         result = {}
         for fld in resolve1(acroform['Fields']):
             item = resolve1(fld)
@@ -31,22 +25,87 @@ class AcroFormParsingService:
             result[fieldname] = data
         return result
 
-    def clean_name(self, s, n=50):
-        result = s.lower()
-        result = re.sub("[^a-z0-9]+", " ", result)
-        result = re.sub("\s+", "_", result.strip())
-        return result[:n]
 
-    def xfa_get_fields_from_template(self, elem, namespaces, result={}, parent=None):
+@pipeline_component_registry.register("AcroFormParsingService")
+class AcroFormParsingService():
+    def __init__(self, pdf):
+        print('AcroFormParsingService')
+        #super().__init__("text_refinement")
+        #self.resources = resources
+        parser = PDFParser(pdf)
+        doc = PDFDocument(parser)
+        acroform = resolve1(doc.catalog["AcroForm"])
+        if 'XFA' in acroform.keys():
+            xfa = ProcessXFA(acroform)
+            self.fields = xfa.cell_values
+        elif 'Fields' in acroform.keys():
+            self.fields = {}
+            for fld in resolve1(acroform['Fields']):
+                item = resolve1(fld)
+                fieldname = item['T'].decode("utf-8")
+                data = None if 'V' not in item.keys() else item['V'].decode("utf-8")
+                self.fields[fieldname] = data
+        else:
+            self.fields = None
+        print(self.fields)
+
+    def serve(self, dp: Image) -> None:
+        """
+        Refines the text extraction results for the given document page (Image).
+
+        :param dp: The document page as an Image object containing text extraction results.
+        """
+        # TODO: Implement the logic for refining text extraction results using the provided resources.
+        pass
+
+    def clone(self) -> "PipelineComponent":
+        """
+        Creates a copy of this TextRefinementService instance.
+        """
+        return self.__class__(self.resources)
+
+
+class ProcessXFA:
+
+    def __init__(self, acroform):
+        xfa = acroform["XFA"]
+        objs = [resolve1(x).get_data().decode() for n, x in enumerate(xfa) if n % 2 == 1]
+        xstr = "".join(objs)
+        self.xml = ET.fromstring(xstr)
+        self.namespaces = self.get_namespaces()
+
+        # Get fields from template namespace
+        self.template_fields = self.get_fields_from_template()
+
+        # Get form values from dataset namespace
+        self.dataset_fields = self.get_fields_from_dataset()
+
+        # Create list of field values and return dict result
+        self.column_names = [
+            field["field_name"] for field in self.dataset_fields.values() if "value" in field.keys()
+        ]
+        self.cell_values = {
+            field["field_name"]: field["value"] for field in self.dataset_fields.values() if "value" in field.keys()
+        }
+
+    def get_namespaces(self):
+        result = {}
+        for elem in list(self.xml):
+            ns, tag = re.match("\{(.+)\}(.+)", elem.tag).groups()
+            result[tag] = ns
+        return result
+
+    def get_fields_from_template(self, elem=None, result={}, parent=None):
         """
         :param elem:
-        :param namespaces:
         :param result:
         :param parent:
 
         Recursively parses a template namespace tree from an XFA document, extracting all necessary child elements
         (presently forms, subforms, and fields)
         """
+        # start at the XML root if this is the first time the function has been called
+        elem = elem if elem is not None else self.xml.find(".//template:template", self.namespaces)
 
         tag_name = elem.tag.split("}")[-1]
         elem_name = tag_name if "name" not in elem.attrib.keys() else elem.attrib["name"]
@@ -75,11 +134,12 @@ class AcroFormParsingService:
                     "toolTip",
                 ]  # field info can come from one of two places
                 for tag in name_tags:
-                    cur = elem.find(f".//template:{tag}", namespaces)
+                    cur = elem.find(f".//template:{tag}", self.namespaces)
                     if cur is not None:
                         if not len(
                                 name
-                        ):  # pull the field name and text from the element text...unless the field name was already found in the other tag type
+                        ):  # pull the field name and text from the element text...unless the field name was already
+                            # found in the other tag type
                             name = "".join(cur.itertext())
                             name_tag = tag
 
@@ -92,27 +152,27 @@ class AcroFormParsingService:
                         "name_tag": name_tag,
                     }
                     # parse dropdown list values, if necessary
-                    items = elem.findall(".//template:items", namespaces)
+                    items = elem.findall(".//template:items", self.namespaces)
                     if len(items) == 2:
                         result[elem_name]["items"] = dict(
                             zip(list(items[1].itertext()), list(items[0].itertext()))
                         )
 
         # see if there are subelements and recurse into them if necessary
-        subs = elem.findall("*", namespaces)
+        subs = elem.findall("*", self.namespaces)
         if len(subs):
             for item in subs:
-                result = self.xfa_get_fields_from_template(item, namespaces, result, parent)
+                result = self.get_fields_from_template(item, result, parent)
         return result
 
-    def get_fields_from_dataset(self, fields, datasets, namespaces):
+    def get_fields_from_dataset(self):
         """
-        :param fields:
-        :param datasets:
-        :param namespaces:
+        Reads the field list generated by get_fields_from_template(), finds each of the fields in the dataset
+        namespace, and extracts the vield value
+        """
+        fields = self.template_fields
+        datasets = self.xml.find(".//datasets:datasets", self.namespaces)
 
-        Reads the field list generated by xfa_get_fields_from_template(), finds each of the fields in the dataset namespace, and extracts the vield value
-        """
         for field_name, field in fields.items():
             elem = datasets.findall(f".//{field_name}")
             if elem is not None:
@@ -135,41 +195,3 @@ class AcroFormParsingService:
                         else:
                             fields[field_name]["value"] = val
         return fields
-
-    def process_xfa_estars(self, root):
-        # open PDF file and extract XFA form data as an XML string
-        # Parse XFA XML
-        namespaces = {}
-        for elem in list(root):
-            ns, tag = re.match("\{(.+)\}(.+)", elem.tag).groups()
-            namespaces[tag] = ns
-
-        # Get fields from template namespace
-        template = root.find(".//template:template", namespaces)
-        t_fields = self.xfa_get_fields_from_template(template, namespaces)
-
-        # Get form values from dataset namespace
-        datasets = root.find(".//datasets:datasets", namespaces)
-        d_fields = self.get_fields_from_dataset(t_fields, datasets, namespaces)
-
-        # Create list of field values and return dict result
-        column_names = [
-            field["field_name"] for field in d_fields.values() if "value" in field.keys()
-        ]
-        cell_values = {
-            field["field_name"]: field["value"]
-            for field in d_fields.values()
-            if "value" in field.keys()
-        }
-
-        result = {
-            "form_id": doc_id,
-            "form_pages": pages,
-            "tot_columns": len(column_names),
-            "column_names": column_names,
-            "cell_values": json.dumps(cell_values),
-            "bucket_name": bucket,
-            "object_key": doc_id,
-        }
-
-        return result

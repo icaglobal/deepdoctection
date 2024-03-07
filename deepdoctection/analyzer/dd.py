@@ -23,7 +23,8 @@ Module for **deep**doctection analyzer.
 -user factory with a reduced config setting
 """
 
-from ..pipe.acroform import *
+from ..pipe.acroform import AcroFormParsingService
+
 import ast
 import os
 from os import environ
@@ -269,6 +270,8 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
     :return: Analyzer pipeline
     """
     pipe_component_list: List[PipelineComponent] = []
+
+    pipe_component_list.append(AcroFormParsingService())
 
     if cfg.USE_LAYOUT:
         d_layout = build_detector(cfg, "LAYOUT")
