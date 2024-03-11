@@ -1,6 +1,6 @@
 from abc import ABC
 
-from .base import PipelineComponent
+from .base import Pipeline, PipelineComponent, PredictorPipelineComponent
 from .registry import pipeline_component_registry
 from ..datapoint.image import Image
 
@@ -27,11 +27,13 @@ class Resources:
 
 
 @pipeline_component_registry.register("AcroFormParsingService")
-class AcroFormParsingService():
-    def __init__(self, pdf):
+class AcroFormParsingService(PipelineComponent):
+    def __init__(self):
         print('AcroFormParsingService')
-        #super().__init__("text_refinement")
+        super().__init__("acroform")
         #self.resources = resources
+        print(self.datapoint)
+        """
         parser = PDFParser(pdf)
         doc = PDFDocument(parser)
         acroform = resolve1(doc.catalog["AcroForm"])
@@ -48,6 +50,10 @@ class AcroFormParsingService():
         else:
             self.fields = None
         print(self.fields)
+        """
+
+    def get_meta_annotation(self):
+        pass
 
     def serve(self, dp: Image) -> None:
         """

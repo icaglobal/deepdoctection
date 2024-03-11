@@ -271,8 +271,6 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
     """
     pipe_component_list: List[PipelineComponent] = []
 
-    pipe_component_list.append(AcroFormParsingService())
-
     if cfg.USE_LAYOUT:
         d_layout = build_detector(cfg, "LAYOUT")
         layout = build_service(d_layout, cfg, "LAYOUT")
@@ -398,6 +396,8 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         floating_text_block_categories=cfg.TEXT_ORDERING.FLOATING_TEXT_BLOCK_CATEGORIES,
         include_residual_text_container=cfg.TEXT_ORDERING.INCLUDE_RESIDUAL_TEXT_CONTAINER,
     )
+
+    pipe_component_list.append(AcroFormParsingService())
 
     pipe = DoctectionPipe(pipeline_component_list=pipe_component_list, page_parsing_service=page_parsing_service)
 

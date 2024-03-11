@@ -125,6 +125,7 @@ class PipelineComponent(ABC):
         raise NotImplementedError
 
     def _meta_has_all_types(self) -> None:
+        print(self.get_meta_annotation())
         if not {"image_annotations", "sub_categories", "relationships", "summaries"}.issubset(
             set(self.get_meta_annotation().keys())
         ):
