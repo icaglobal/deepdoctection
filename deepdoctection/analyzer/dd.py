@@ -23,6 +23,7 @@ Module for **deep**doctection analyzer.
 -user factory with a reduced config setting
 """
 
+from ..pipe.testservice import TestService
 from ..pipe.acroform import AcroFormParsingService
 
 import ast
@@ -271,6 +272,8 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
     """
     pipe_component_list: List[PipelineComponent] = []
 
+    pipe_component_list.append(TestService())
+    """
     if cfg.USE_LAYOUT:
         d_layout = build_detector(cfg, "LAYOUT")
         layout = build_service(d_layout, cfg, "LAYOUT")
@@ -391,13 +394,12 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         )
         pipe_component_list.append(order)
 
+    """
     page_parsing_service = PageParsingService(
         text_container=LayoutType.word,
         floating_text_block_categories=cfg.TEXT_ORDERING.FLOATING_TEXT_BLOCK_CATEGORIES,
         include_residual_text_container=cfg.TEXT_ORDERING.INCLUDE_RESIDUAL_TEXT_CONTAINER,
     )
-
-    pipe_component_list.append(AcroFormParsingService())
 
     pipe = DoctectionPipe(pipeline_component_list=pipe_component_list, page_parsing_service=page_parsing_service)
 

@@ -29,10 +29,10 @@ class Resources:
 @pipeline_component_registry.register("AcroFormParsingService")
 class AcroFormParsingService(PipelineComponent):
     def __init__(self):
-        print('AcroFormParsingService')
-        super().__init__("acroform")
-        #self.resources = resources
-        print(self.datapoint)
+        super().__init__(self)
+        reader = self.df.df.df.df.df.df._itr.file_reader
+        print(reader.xfa.keys())
+
         """
         parser = PDFParser(pdf)
         doc = PDFDocument(parser)
@@ -52,23 +52,15 @@ class AcroFormParsingService(PipelineComponent):
         print(self.fields)
         """
 
+    def clone(self):
+        #super().clone()
+        pass
     def get_meta_annotation(self):
+        #super().get_meta_annotation()
+        return {'image_annotations': [], 'sub_categories': {}, 'relationships': {}, 'summaries': []}
+    def serve(self, dp):
+        #super().serve()
         pass
-
-    def serve(self, dp: Image) -> None:
-        """
-        Refines the text extraction results for the given document page (Image).
-
-        :param dp: The document page as an Image object containing text extraction results.
-        """
-        # TODO: Implement the logic for refining text extraction results using the provided resources.
-        pass
-
-    def clone(self) -> "PipelineComponent":
-        """
-        Creates a copy of this TextRefinementService instance.
-        """
-        return self.__class__(self.resources)
 
 
 class ProcessXFA:
