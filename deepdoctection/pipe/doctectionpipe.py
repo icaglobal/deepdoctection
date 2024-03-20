@@ -35,6 +35,8 @@ from ..utils.settings import LayoutType
 from .base import Pipeline, PipelineComponent, PredictorPipelineComponent
 from .common import PageParsingService
 
+from ..utils.pdf_utils import PDFStreamer
+
 
 def _collect_from_kwargs(
     **kwargs: Union[str, DataFlow, bool, int, Pathlike, Union[str, List[str]]]
@@ -99,7 +101,6 @@ def _doc_to_dataflow(path: Pathlike, max_datapoints: Optional[int] = None) -> Da
 
     return df
 
-
 class DoctectionPipe(Pipeline):
     """
     Prototype for a document layout pipeline. Contains implementation for loading document types (images in directory,
@@ -139,6 +140,7 @@ class DoctectionPipe(Pipeline):
             isinstance(element, (PipelineComponent, PredictorPipelineComponent)) for element in pipeline_component_list
         )
         super().__init__(pipeline_component_list)
+        self.document_parser = DocumentParserService()
 
     def _entry(self, **kwargs: Union[str, DataFlow, bool, int, Pathlike, Union[str, List[str]]]) -> DataFlow:
         path, file_type, shuffle, max_datapoints, doc_path, dataset_dataflow = _collect_from_kwargs(**kwargs)
@@ -224,9 +226,36 @@ class DoctectionPipe(Pipeline):
         assert output in ("page", "image", "dict"), "output must be either page image or dict"
         df = self._entry(**kwargs)
         df = self._build_pipe(df)
+        self.document_parser.pdf_streamer = self.get_pdf_stream(df)
         if output == "page":
             df = self.dataflow_to_page(df)
         elif output == "dict":
             df = self.dataflow_to_page(df)
             df = MapData(df, lambda dp: dp.as_dict())
         return df
+
+    def get_pdf_stream(self, df):
+        """
+        Descends through a dataflow to find the bottommost element and extracts a PDF stream from it
+        """
+
+        result = None
+        while 'df' in df.__dict__.keys():
+            df = df.df
+        for attr in df.__dict__.keys():
+            obj = getattr(df, attr)
+            if isinstance(obj, PDFStreamer):
+                result = obj
+        return result
+
+
+class DocumentParserService:
+    """
+    A service to handle document-level objects
+
+    This actually probably belongs in pipe/common.py or some such but it's here to make it more convenient to remove if it turns
+    out to be unnecessary
+    """
+
+    def __init__(self):
+        self.pdf_streamer = None
