@@ -10,11 +10,9 @@ class TestService(PipelineComponent):
         import os
         print('TestService')
         super().__init__(self)
-        max_datapoints = 1000
 
-        #file_name = os.path.split(path)[1]
-        #prefix, suffix = os.path.splitext(file_name)
         df: DataFlow
+
         a = 1
         #self.streamer = PDFStreamer()
         #df = MapData(
@@ -23,11 +21,26 @@ class TestService(PipelineComponent):
         #)
 
     def clone(self):
-        #super().clone()
-        pass
+        return self.__class__()
+
     def get_meta_annotation(self):
         #super().get_meta_annotation()
         return {'image_annotations': [], 'sub_categories': {}, 'relationships': {}, 'summaries': []}
-    def serve(self, dp):
-        #super().serve()
-        pass
+
+    def serve(self, dp) -> None:
+        print('SERVE!!!')
+        super().serve()
+
+    def get_pdf_stream(self, df):
+        """
+        Descends through a dataflow to find the bottommost element and extracts a PDF stream from it
+        """
+
+        result = None
+        while 'df' in df.__dict__.keys():
+            df = df.df
+        for attr in df.__dict__.keys():
+            obj = getattr(df, attr)
+            if isinstance(obj, PDFStreamer):
+                result = obj
+        return result
