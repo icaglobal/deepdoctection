@@ -206,6 +206,10 @@ class DoctectionPipe(Pipeline):
         """
         return self.page_parser.predict_dataflow(df)
 
+    def get_doc_entities_from_dataflow(self, df:DataFlow):
+        stream = self.get_pdf_stream(df)
+
+
     def analyze(self, **kwargs: Union[str, DataFlow, bool, int, Pathlike, Union[str, List[str]]]) -> DataFlow:
         """
         `kwargs key dataset_dataflow:` Transfer a dataflow of a dataset via its dataflow builder

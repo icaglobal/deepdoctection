@@ -6,12 +6,13 @@ from .common import MapData
 from ..dataflow.custom import CustomDataFromIterable
 
 class TestService(PipelineComponent):
-    def __init__(self):
+    def __init__(self, df):
         import os
         print('TestService')
         super().__init__(self)
 
-        df: DataFlow
+        #df: DataFlow
+        print(df)
 
         a = 1
         #self.streamer = PDFStreamer()
@@ -29,7 +30,6 @@ class TestService(PipelineComponent):
 
     def serve(self, dp) -> None:
         print('SERVE!!!')
-        super().serve()
 
     def get_pdf_stream(self, df):
         """

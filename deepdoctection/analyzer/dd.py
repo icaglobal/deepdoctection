@@ -271,7 +271,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
     :return: Analyzer pipeline
     """
     pipe_component_list: List[PipelineComponent] = []
-
+    """
     if cfg.USE_LAYOUT:
         d_layout = build_detector(cfg, "LAYOUT")
         layout = build_service(d_layout, cfg, "LAYOUT")
@@ -391,7 +391,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
             paragraph_break=cfg.TEXT_ORDERING.PARAGRAPH_BREAK,
         )
         pipe_component_list.append(order)
-
+    """
     pipe_component_list.append(TestService())
 
     page_parsing_service = PageParsingService(
