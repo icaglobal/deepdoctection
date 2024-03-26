@@ -22,7 +22,6 @@ Module for **deep**doctection analyzer.
 
 -user factory with a reduced config setting
 """
-
 import ast
 import os
 from os import environ
@@ -393,6 +392,9 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
     # Invoke the multipage linking service - not conditional
     """
     multi_page = MultiPageLinkingService([
+    {
+        'category_names': {
+            LayoutType.word: ImageAnnotation(), # maybe?
             ImageAnnotation(): ImageAnnotation() # Placeholder
         }
     },
