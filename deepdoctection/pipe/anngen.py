@@ -70,7 +70,7 @@ class DatapointManager:
         """
         assert that datapoint is passed
         """
-        assert self.datapoint_is_passed, "Pass datapoint to  DatapointManager before creating anns"
+        assert self.datapoint_is_passed, "Pass datapoint to DatapointManager before creating anns"
 
     def maybe_map_category_id(self, category_id: Union[str, int]) -> int:
         """
@@ -323,3 +323,46 @@ class DatapointManager:
     def get_annotation(self, annotation_id: str) -> ImageAnnotation:
         """get single `ImageAnnotation`"""
         return self._cache_anns[annotation_id]
+    
+    # TODO: Check with Janis, do we need to apply the @setter decorator?
+    # TODO: Make this more generic for other types of annotations
+    def update_annotation(self, annotation_id: str, new_value: Union[str, List[str], None] = None, new_score: Optional[float] = None, sub_category_key: Optional[ObjectTypes] = None):
+        """
+        Updates the specified annotation or its sub-category with a new value and/or score.
+
+        Parameters:
+        - annotation_id (str): The ID of the annotation to update.
+        - new_value (Union[str, List[str], None]): The new value to set for the annotation, if applicable.
+        - new_score (Optional[float]): The new score to set for the annotation.
+        - sub_category_key (Optional[ObjectTypes]): The key of the sub-category to update.
+
+        Raises:
+        - ValueError: If the annotation_id does not exist within the current datapoint.
+        """
+        print(f"DEBUG: Entering update_annotation. Annotation ID: {annotation_id}, New Value: {new_value}, New Score: {new_score}, Sub-category Key: {sub_category_key}")
+
+        self.assert_datapoint_passed()
+
+        annotation = self._cache_anns.get(annotation_id)
+        if not annotation:
+            raise ValueError(f"Annotation with ID {annotation_id} not found.")
+
+        # Handle updating sub-categories if a key is provided
+        if sub_category_key:
+            sub_category = annotation.sub_categories.get(sub_category_key)
+            if not sub_category:
+                raise ValueError(f"Sub-category with key {sub_category_key} not found in annotation {annotation_id}.")
+            if new_value is not None and hasattr(sub_category, 'value'):
+                sub_category.value = new_value
+            if new_score is not None and hasattr(sub_category, 'score'):
+                sub_category.score = new_score
+        else:
+            # Update the main annotation if no sub-category key is provided
+            if new_value is not None and hasattr(annotation, 'value'):
+                annotation.value = new_value
+            if new_score is not None and hasattr(annotation, 'score'):
+                annotation.score = new_score
+
+        # Reflect changes in the cache and datapoint's annotation list
+        self._cache_anns[annotation_id] = annotation
+        self.datapoint.annotations = [ann if ann.annotation_id != annotation_id else annotation for ann in self.datapoint.annotations]

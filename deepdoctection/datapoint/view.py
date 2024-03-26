@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Typ
 import numpy as np
 
 from ..utils.detection_types import ImageType, JsonDict, Pathlike
+from ..utils.error import AnnotationError, ImageError
 from ..utils.logger import LoggingRecord, logger
 from ..utils.settings import (
     CellType,
@@ -42,6 +43,7 @@ from ..utils.viz import draw_boxes, interactive_imshow, viz_handler
 from .annotation import ContainerAnnotation, ImageAnnotation, SummaryAnnotation, ann_from_dict
 from .box import BoundingBox, crop_box_from_image
 from .image import Image
+import PyPDF2
 
 
 class ImageAnnotationBaseView(ImageAnnotation):
@@ -96,7 +98,7 @@ class ImageAnnotationBaseView(ImageAnnotation):
                 interactive_imshow(np_image)
                 return None
             return np_image
-        raise ValueError(f"base_page.image is None for {self.annotation_id}")
+        raise AnnotationError(f"base_page.image is None for {self.annotation_id}")
 
     def __getattr__(self, item: str) -> Optional[Union[str, int, List[str]]]:
         """
@@ -115,7 +117,7 @@ class ImageAnnotationBaseView(ImageAnnotation):
         :return: value according to the logic described above
         """
         if item not in self.get_attribute_names():
-            raise AttributeError(f"Attribute {item} is not supported for {type(self)}")
+            raise AnnotationError(f"Attribute {item} is not supported for {type(self)}")
         if item in self.sub_categories:
             sub_cat = self.get_sub_category(get_type(item))
             if item != sub_cat.category_name:
@@ -326,7 +328,7 @@ class Table(Layout):
     def text(self) -> str:
         try:
             return str(self)
-        except TypeError:
+        except (TypeError, AnnotationError):
             return super().text
 
     @property
@@ -368,7 +370,7 @@ class Table(Layout):
             for cell in cells:
                 all_words.extend(cell.get_ordered_words())  # type: ignore
             return all_words
-        except TypeError:
+        except (TypeError, AnnotationError):
             return super().get_ordered_words()
 
 
@@ -485,7 +487,7 @@ class Page(Image):
 
     def __getattr__(self, item: str) -> Any:
         if item not in self.get_attribute_names():
-            raise AttributeError(f"Attribute {item} is not supported for {type(self)}")
+            raise ImageError(f"Attribute {item} is not supported for {type(self)}")
         if self.summary is not None:
             if item in self.summary.sub_categories:
                 sub_cat = self.summary.get_sub_category(get_type(item))
@@ -629,10 +631,10 @@ class Page(Image):
         """
         ann = self.get_annotation(annotation_ids=annotation_id)[0]
         if ann.category_name not in self.floating_text_block_categories:
-            raise ValueError(
-                f"Annotation {annotation_id} with category_name {ann.category_name} is not a floating text "
-                f"block category. Cannot get context. Make sure to make this category a floating text "
-                f"block"
+            raise ImageError(
+                f"Cannot get context. Make sure to parametrize this category to a floating text: "
+                f"annotation_id: {annotation_id},"
+                f"category_name: {ann.category_name}"
             )
         block_with_order = self._order("layouts")
         position = block_with_order.index(ann)
@@ -897,3 +899,85 @@ class Page(Image):
             for word in all_words
             if word.token_tag not in (TokenClasses.other, None)
         ]
+
+
+class Document:
+    """
+    Represents a higher-level concept of a document, potentially encompassing multiple pages.
+    This class encapsulates document-wide data and metadata, including multipage entities
+    and XFA information.
+    """
+    def __init__(self, pages: List[Page], 
+                 metadata: Dict[str, Any] = None, 
+                 dynamic_forms: Optional[Any] = None,
+                 ):
+        self.pages = pages
+        self.metadata = metadata if metadata is not None else {}
+        self.dynamic_forms = dynamic_forms
+        self.decision_funcs = self.define_multipage_entity_decision_functions()
+
+    
+    def define_multipage_entity_decision_functions(self, cfg)
+    
+    
+    def get_multipage_entities(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Identifies and returns multipage entities like tables or paragraphs that span across multiple pages.
+        """
+        tables = []
+        paragraphs = []
+
+        # Implement logic to detect multipage tables and paragraphs
+        for i, page in enumerate(self.pages):
+            tables.extend(self._detect_multipage_tables(page))
+            paragraphs.extend(self._detect_multipage_paragraphs(page))
+
+        # self.multipage_entities.tables = tables
+        # self.multipage_entities.paragraphs = paragraphs
+        return {
+            "tables": tables,
+            "paragraphs": paragraphs
+        }
+
+    def _detect_multipage_tables(self, page: Page) -> List[Dict[str, Any]]:
+        """
+        Detects tables that span across multiple pages.
+        """
+        # Placeholder for table detection logic
+        return []
+
+    def _detect_multipage_paragraphs(self, page: Page) -> List[Dict[str, Any]]:
+        """
+        Detects paragraphs that span across multiple pages.
+        """
+        # Placeholder for paragraph detection logic
+        return []
+
+    
+    def read_pdf_bytes(self, pdf_file_path):
+        """
+        Reads a PDF file and returns its content as bytes.
+
+        Args:
+            pdf_file_path (str): The path to the PDF file to be read.
+
+        Returns:
+            bytes: The bytes content of the PDF file.
+        """
+        try:
+            with open(pdf_file_path, "rb") as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                pdf_bytes = file.read()  # Read the entire PDF file as bytes
+                return pdf_bytes
+        except FileNotFoundError:
+            print(f"The file {pdf_file_path} was not found.")
+            return None
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
+        
+    @staticmethod
+    def from_pages(pages: List[Page]) -> "Document":
+        return Document(pages)
+
+    # Additional methods as needed
