@@ -7,3 +7,10 @@ Regardless, doclevel processes should be run by some kind of DocumentParsingServ
 
 Seems like the acroform pipeline object should be a dataflow with a single data point
 
+DoctectionPipe.analyze
+	calls self.get_doc_entities_from_dataflow
+		calls self.get_pdf_stream
+		puts result in 
+			service?
+			method?
+	or should it just create another pipeline
