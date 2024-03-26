@@ -23,6 +23,9 @@ Module for **deep**doctection analyzer.
 -user factory with a reduced config setting
 """
 
+from ..pipe.testservice import TestService
+from ..pipe.acroform import AcroFormParsingService
+
 import ast
 import os
 from os import environ
@@ -44,6 +47,7 @@ from ..pipe.order import TextOrderService
 from ..pipe.refine import TableSegmentationRefinementService
 from ..pipe.segment import PubtablesSegmentationService, TableSegmentationService
 from ..pipe.text import TextExtractionService
+from ..pipe.text_refine import TextRefinementService
 from ..utils.detection_types import Pathlike
 from ..utils.env_info import get_device
 from ..utils.file_utils import (
@@ -111,6 +115,7 @@ def maybe_copy_config_to_cache(
 
 def config_sanity_checks(cfg: AttrDict) -> None:
     """Some config sanity checks"""
+    
     if cfg.USE_PDF_MINER and cfg.USE_OCR and cfg.OCR.USE_DOCTR:
         raise ValueError("Configuration USE_PDF_MINER= True and USE_OCR=True and USE_DOCTR=True is not allowed")
     if cfg.USE_OCR:
@@ -119,7 +124,6 @@ def config_sanity_checks(cfg: AttrDict) -> None:
                 "Choose either OCR.USE_TESSERACT=True or OCR.USE_DOCTR=True or OCR.USE_TEXTRACT=True "
                 "and set the other two to False. Only one OCR system can be activated."
             )
-
 
 def build_detector(
     cfg: AttrDict, mode: str
@@ -269,7 +273,6 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
     :return: Analyzer pipeline
     """
     pipe_component_list: List[PipelineComponent] = []
-
     if cfg.USE_LAYOUT:
         d_layout = build_detector(cfg, "LAYOUT")
         layout = build_service(d_layout, cfg, "LAYOUT")
@@ -389,12 +392,25 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
             paragraph_break=cfg.TEXT_ORDERING.PARAGRAPH_BREAK,
         )
         pipe_component_list.append(order)
+                
+        # Text Refinement Service 
+        if cfg.USE_TEXT_REFINEMENT:
+            categories_to_refine = [LayoutType.text, LayoutType.title] 
+            text_refine = TextRefinementService(
+                use_spellcheck_refinement=cfg.TEXT_REFINEMENT.USE_SPELLCHECKER_REFINEMENT,
+                use_nlp_refinement=cfg.TEXT_REFINEMENT.USE_NLP_REFINEMENT,
+                text_refinement_threshold=cfg.TEXT_REFINEMENT.TEXT_REFINEMENT_THRESHOLD,
+                nlp_refinement_model_name=cfg.TEXT_REFINEMENT.NLP_REFINEMENT.MLM_MODEL, # TODO: Add support for custom models
+                categories_to_refine=categories_to_refine) 
+            
+            pipe_component_list.append(text_refine)
 
     page_parsing_service = PageParsingService(
         text_container=LayoutType.word,
         floating_text_block_categories=cfg.TEXT_ORDERING.FLOATING_TEXT_BLOCK_CATEGORIES,
         include_residual_text_container=cfg.TEXT_ORDERING.INCLUDE_RESIDUAL_TEXT_CONTAINER,
     )
+
     pipe = DoctectionPipe(pipeline_component_list=pipe_component_list, page_parsing_service=page_parsing_service)
 
     return pipe

@@ -1,0 +1,16 @@
+Should there be a whole separate document-level pipeline?
+	Seems like the regular pipeline is geared toward pages
+	Could be run after the regular pipeline, which is when we think some of the doclevel processes (ie. multipage tables) should be run
+
+Regardless, doclevel processes should be run by some kind of DocumentParsingService
+	And if that's happening, maybe there should be a MultiDocParsingService to handle paralellization and any other cross-document things we want to do
+
+Seems like the acroform pipeline object should be a dataflow with a single data point
+
+DoctectionPipe.analyze
+	calls self.get_doc_entities_from_dataflow
+		calls self.get_pdf_stream
+		puts result in 
+			service?
+			method?
+	or should it just create another pipeline
