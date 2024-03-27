@@ -43,6 +43,11 @@ from ..utils.viz import draw_boxes, interactive_imshow, viz_handler
 from .annotation import ContainerAnnotation, ImageAnnotation, SummaryAnnotation, ann_from_dict
 from .box import BoundingBox, crop_box_from_image
 from .image import Image
+from pdfminer.pdfparser import PDFParser
+from pdfminer.pdfdocument import PDFDocument
+from pdfminer.pdftypes import resolve1
+import xml.etree.ElementTree as ET
+import json
 
 
 class ImageAnnotationBaseView(ImageAnnotation):
@@ -315,7 +320,7 @@ class Table(Layout):
         table_list = [["" for _ in range(self.number_of_columns)] for _ in range(self.number_of_rows)]  # type: ignore
         for cell in cells:
             table_list[cell.row_number - 1][cell.column_number - 1] = (  # type: ignore
-                table_list[cell.row_number - 1][cell.column_number - 1] + cell.text + " "  # type: ignore
+                    table_list[cell.row_number - 1][cell.column_number - 1] + cell.text + " "  # type: ignore
             )
         return table_list
 
@@ -455,10 +460,10 @@ class Page(Image):
 
     @no_type_check
     def get_annotation(
-        self,
-        category_names: Optional[Union[str, ObjectTypes, Sequence[Union[str, ObjectTypes]]]] = None,
-        annotation_ids: Optional[Union[str, Sequence[str]]] = None,
-        annotation_types: Optional[Union[str, Sequence[str]]] = None,
+            self,
+            category_names: Optional[Union[str, ObjectTypes, Sequence[Union[str, ObjectTypes]]]] = None,
+            annotation_ids: Optional[Union[str, Sequence[str]]] = None,
+            annotation_types: Optional[Union[str, Sequence[str]]] = None,
     ) -> List[ImageAnnotationBaseView]:
         """
         Identical to its base class method for having correct return types. If the base class changes, please
@@ -520,12 +525,12 @@ class Page(Image):
 
     @classmethod
     def from_image(
-        cls,
-        image_orig: Image,
-        text_container: Optional[ObjectTypes] = None,
-        floating_text_block_categories: Optional[Sequence[ObjectTypes]] = None,
-        include_residual_text_container: bool = True,
-        base_page: Optional["Page"] = None,
+            cls,
+            image_orig: Image,
+            text_container: Optional[ObjectTypes] = None,
+            floating_text_block_categories: Optional[Sequence[ObjectTypes]] = None,
+            include_residual_text_container: bool = True,
+            base_page: Optional["Page"] = None,
     ) -> "Page":
         """
         Factory function for generating a `Page` instance from `image_orig` .
@@ -638,8 +643,8 @@ class Page(Image):
         block_with_order = self._order("layouts")
         position = block_with_order.index(ann)
         return block_with_order[
-            max(0, position - context_size) : min(position + context_size + 1, len(block_with_order))
-        ]
+               max(0, position - context_size): min(position + context_size + 1, len(block_with_order))
+               ]
 
     @property
     def chunks(self) -> List[Tuple[str, str, int, str, str, str, str]]:
@@ -684,16 +689,16 @@ class Page(Image):
 
     @no_type_check
     def viz(
-        self,
-        show_tables: bool = True,
-        show_layouts: bool = True,
-        show_cells: bool = True,
-        show_table_structure: bool = True,
-        show_words: bool = False,
-        show_token_class: bool = True,
-        ignore_default_token_class: bool = False,
-        interactive: bool = False,
-        **debug_kwargs: str,
+            self,
+            show_tables: bool = True,
+            show_layouts: bool = True,
+            show_cells: bool = True,
+            show_table_structure: bool = True,
+            show_words: bool = False,
+            show_token_class: bool = True,
+            ignore_default_token_class: bool = False,
+            interactive: bool = False,
+            **debug_kwargs: str,
     ) -> Optional[ImageType]:
         """
         Display a page with detected bounding boxes of various types.
@@ -848,11 +853,11 @@ class Page(Image):
         cls._attribute_names.add(attribute_name.value)
 
     def save(
-        self,
-        image_to_json: bool = True,
-        highest_hierarchy_only: bool = False,
-        path: Optional[Pathlike] = None,
-        dry: bool = False,
+            self,
+            image_to_json: bool = True,
+            highest_hierarchy_only: bool = False,
+            path: Optional[Pathlike] = None,
+            dry: bool = False,
     ) -> Optional[JsonDict]:
         """
         Export image as dictionary. As numpy array cannot be serialized `image` values will be converted into
@@ -870,11 +875,11 @@ class Page(Image):
     @classmethod
     @no_type_check
     def from_file(
-        cls,
-        file_path: str,
-        text_container: Optional[ObjectTypes] = None,
-        floating_text_block_categories: Optional[List[ObjectTypes]] = None,
-        include_residual_text_container: bool = True,
+            cls,
+            file_path: str,
+            text_container: Optional[ObjectTypes] = None,
+            floating_text_block_categories: Optional[List[ObjectTypes]] = None,
+            include_residual_text_container: bool = True,
     ) -> "Page":
         """Reading JSON file and building a `Page` object with given config.
         :param file_path: Path to file
@@ -898,3 +903,134 @@ class Page(Image):
             for word in all_words
             if word.token_tag not in (TokenClasses.other, None)
         ]
+
+
+class Document:
+    """
+    Represents a higher-level concept of a document, potentially encompassing multiple pages.
+    This class encapsulates document-wide data and metadata, including multipage entities
+    and XFA information.
+    """
+
+    def __init__(self, pages: List[Page],
+                 metadata: Dict[str, Any] = None,
+                 dynamic_forms: Optional[Any] = None,
+                 ):
+        self.pages = pages
+        self.metadata = metadata if metadata is not None else {}
+        self.dynamic_forms = dynamic_forms
+        self.decision_funcs = self.define_multipage_entity_decision_functions()
+
+    def define_multipage_entity_decision_functions(self):
+        pass
+
+    def get_multipage_entities(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Identifies and returns multipage entities like tables or paragraphs that span across multiple pages.
+        """
+        tables = []
+        paragraphs = []
+
+        # Implement logic to detect multipage tables and paragraphs
+        for i, page in enumerate(self.pages):
+            tables.extend(self._detect_multipage_tables(page))
+            paragraphs.extend(self._detect_multipage_paragraphs(page))
+
+        # self.multipage_entities.tables = tables
+        # self.multipage_entities.paragraphs = paragraphs
+        return {
+            "tables": tables,
+            "paragraphs": paragraphs
+        }
+
+    def _detect_multipage_tables(self, page: Page) -> List[Dict[str, Any]]:
+        """
+        Detects tables that span across multiple pages.
+        """
+        # Placeholder for table detection logic
+        return []
+
+    def _detect_multipage_paragraphs(self, page: Page) -> List[Dict[str, Any]]:
+        """
+        Detects paragraphs that span across multiple pages.
+        """
+        # Placeholder for paragraph detection logic
+        return []
+
+    def read_pdf_bytes(self, pdf_file_path):
+        """
+        Reads a PDF file and returns its content as bytes.
+
+        Args:
+            pdf_file_path (str): The path to the PDF file to be read.
+
+        Returns:
+            bytes: The bytes content of the PDF file.
+        """
+        try:
+            with open(pdf_file_path, "rb") as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                pdf_bytes = file.read()  # Read the entire PDF file as bytes
+                self.pdf_bytes = pdf_bytes
+        except FileNotFoundError:
+            print(f"The file {pdf_file_path} was not found.")
+            return None
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
+
+    @staticmethod
+    def from_pages(pages: List[Page]) -> "Document":
+        return Document(pages)
+
+
+class Document:
+    def __init__(self, pdf_file_path=None):
+        self.pages = []
+        self.xfa_data = None
+        if pdf_file_path:
+            self.load_xfa_data(pdf_file_path)
+
+    def load_xfa_data(self, pdf_file_path):
+        """
+        Loads XFA data from a PDF file and stores it in the document attribute.
+
+        Args:
+            pdf_file_path (str): Path to the PDF file.
+        """
+        try:
+            with open(pdf_file_path, "rb") as file:
+                parser = PDFParser(file)
+                doc = PDFDocument(parser)
+                xfa = resolve1(doc.catalog['AcroForm'])['XFA']
+                xfa_data = [resolve1(x).get_data().decode() for n, x in enumerate(xfa) if n % 2 == 1]
+                self.xfa_data = self._process_xfa_data(xfa_data)
+        except Exception as e:
+            print(f"Failed to load XFA data from {pdf_file_path}: {e}")
+
+    @staticmethod
+    def _process_xfa_data(xfa_data):
+        """
+        Process the XFA data to extract form fields and values.
+
+        Args:
+            xfa_data (list): List of strings representing the XFA data.
+
+        Returns:
+            dict: Processed XFA data.
+        """
+        # Concatenate XFA data and parse XML
+        xstr = "".join(xfa_data)
+        root = ET.fromstring(xstr)
+
+        # Extract namespaces (simplified version)
+        namespaces = {elem.tag.split('}')[-1]: ns for elem in root.iter() if '}' in elem.tag}
+
+        # Example processing - you can expand this based on your needs
+        fields = {}
+        for field in root.findall('.//field', namespaces):
+            name = field.get('name')
+            value = field.text or ''
+            fields[name] = value
+
+        return fields
