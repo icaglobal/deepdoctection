@@ -1,0 +1,52 @@
+import sys
+import PyPDF2
+
+sys.path.insert(0, '/home/ubuntu/deepdoctection')
+
+from deepdoctection.analyzer import get_dd_analyzer
+from deepdoctection.datapoint import Page, Document
+
+FILE_PATH = 'tests/test_objects/publaynet.pdf'
+
+
+# Configure the analyzer
+analyzer = get_dd_analyzer(config_overwrite=["USE_PDF_MINER=True"],
+                           reset_config_file=True
+                           ) 
+
+
+# Analyze the PDF
+df = analyzer.analyze(path=FILE_PATH)
+df.reset_state()  # Prepare the dataflow
+
+# Initialize an iterator over the document pages
+doc_iter = iter(df)
+
+# Collect pages
+pages = []
+max_pages = 2
+curr_page = 0
+
+try:
+    while curr_page <= max_pages:
+        page = next(doc_iter)
+        if isinstance(page, Page):
+            pages.append(page)
+        
+        curr_page += 1
+except StopIteration:
+    # Reached the end of the document
+    pass
+
+# Instantiate the Document with collected pages
+document = Document.from_pages(pages)
+
+# 
+document.read_pdf_bytes(FILE_PATH)
+
+
+# Attempt to detect multipage entities
+# multipage_entities = document.get_multipage_entities()
+
+# You might want to do something with `multipage_entities` here
+# print(multipage_entities)

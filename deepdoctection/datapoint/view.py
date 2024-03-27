@@ -43,7 +43,11 @@ from ..utils.viz import draw_boxes, interactive_imshow, viz_handler
 from .annotation import ContainerAnnotation, ImageAnnotation, SummaryAnnotation, ann_from_dict
 from .box import BoundingBox, crop_box_from_image
 from .image import Image
-import PyPDF2
+from pdfminer.pdfparser import PDFParser
+from pdfminer.pdfdocument import PDFDocument
+from pdfminer.pdftypes import resolve1
+import xml.etree.ElementTree as ET
+import json
 
 
 class ImageAnnotationBaseView(ImageAnnotation):
@@ -969,7 +973,7 @@ class Document:
             with open(pdf_file_path, "rb") as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 pdf_bytes = file.read()  # Read the entire PDF file as bytes
-                return pdf_bytes
+                self.pdf_bytes = pdf_bytes
         except FileNotFoundError:
             print(f"The file {pdf_file_path} was not found.")
             return None
@@ -980,3 +984,56 @@ class Document:
     @staticmethod
     def from_pages(pages: List[Page]) -> "Document":
         return Document(pages)
+    
+    
+
+class Document:
+    def __init__(self, pdf_file_path=None):
+        self.pages = []
+        self.xfa_data = None
+        if pdf_file_path:
+            self.load_xfa_data(pdf_file_path)
+    
+    def load_xfa_data(self, pdf_file_path):
+        """
+        Loads XFA data from a PDF file and stores it in the document attribute.
+        
+        Args:
+            pdf_file_path (str): Path to the PDF file.
+        """
+        try:
+            with open(pdf_file_path, "rb") as file:
+                parser = PDFParser(file)
+                doc = PDFDocument(parser)
+                xfa = resolve1(doc.catalog['AcroForm'])['XFA']
+                xfa_data = [resolve1(x).get_data().decode() for n, x in enumerate(xfa) if n % 2 == 1]
+                self.xfa_data = self._process_xfa_data(xfa_data)
+        except Exception as e:
+            print(f"Failed to load XFA data from {pdf_file_path}: {e}")
+    
+    @staticmethod
+    def _process_xfa_data(xfa_data):
+        """
+        Process the XFA data to extract form fields and values.
+        
+        Args:
+            xfa_data (list): List of strings representing the XFA data.
+            
+        Returns:
+            dict: Processed XFA data.
+        """
+        # Concatenate XFA data and parse XML
+        xstr = "".join(xfa_data)
+        root = ET.fromstring(xstr)
+        
+        # Extract namespaces (simplified version)
+        namespaces = {elem.tag.split('}')[-1]: ns for elem in root.iter() if '}' in elem.tag}
+        
+        # Example processing - you can expand this based on your needs
+        fields = {}
+        for field in root.findall('.//field', namespaces):
+            name = field.get('name')
+            value = field.text or ''
+            fields[name] = value
+        
+        return fields   

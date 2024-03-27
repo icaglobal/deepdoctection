@@ -339,8 +339,6 @@ class DatapointManager:
         Raises:
         - ValueError: If the annotation_id does not exist within the current datapoint.
         """
-        print(f"DEBUG: Entering update_annotation. Annotation ID: {annotation_id}, New Value: {new_value}, New Score: {new_score}, Sub-category Key: {sub_category_key}")
-
         self.assert_datapoint_passed()
 
         annotation = self._cache_anns.get(annotation_id)
