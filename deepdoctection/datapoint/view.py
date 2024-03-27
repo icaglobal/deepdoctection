@@ -21,7 +21,7 @@ simplify consumption
 """
 
 from copy import copy
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union, no_type_check
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union, no_type_check, Callable
 
 import numpy as np
 
@@ -43,10 +43,6 @@ from ..utils.viz import draw_boxes, interactive_imshow, viz_handler
 from .annotation import ContainerAnnotation, ImageAnnotation, SummaryAnnotation, ann_from_dict
 from .box import BoundingBox, crop_box_from_image
 from .image import Image
-from pdfminer.pdfparser import PDFParser
-from pdfminer.pdfdocument import PDFDocument
-from pdfminer.pdftypes import resolve1
-import xml.etree.ElementTree as ET
 import json
 
 
@@ -908,129 +904,403 @@ class Page(Image):
 class Document:
     """
     Represents a higher-level concept of a document, potentially encompassing multiple pages.
-    This class encapsulates document-wide data and metadata, including multipage entities
-    and XFA information.
     """
 
     def __init__(self, pages: List[Page],
-                 metadata: Dict[str, Any] = None,
-                 dynamic_forms: Optional[Any] = None,
                  ):
         self.pages = pages
-        self.metadata = metadata if metadata is not None else {}
-        self.dynamic_forms = dynamic_forms
-        self.decision_funcs = self.define_multipage_entity_decision_functions()
 
-    def define_multipage_entity_decision_functions(self):
-        pass
-
-    def get_multipage_entities(self) -> Dict[str, List[Dict[str, Any]]]:
+    def _get_page_paragraph_metadata(self, page) -> List[Dict[str, Any]]:
         """
-        Identifies and returns multipage entities like tables or paragraphs that span across multiple pages.
-        """
-        tables = []
-        paragraphs = []
+        Gets the paragraph metadata for a given page.
 
-        # Implement logic to detect multipage tables and paragraphs
+        :param page: Page dataflow from the document iterable object
+        (assumed to be an instance of the Page class)
+        :return: A list of dictionaries of the page paragraph metadata
+        """
+        table_len = len(page.tables)
+        page_paragraph_metadata_list: List[Dict[str, Any]] = []
+
+        if self._is_there_table(table_len):
+            table_bbox_list: List[Dict[str, int]] = [
+                self._format_bbox(table.bbox) for table in page.tables
+            ]
+
+            for layout in page.layouts:
+                if layout.category_name == "text":
+                    layout_bbox = self._format_bbox(layout.bbox)
+                    if not self._is_paragraph_in_table(layout_bbox, table_bbox_list):
+                        paragraph_metadata = self._get_paragraph_metadata(page, layout)
+                        page_paragraph_metadata_list.append(paragraph_metadata)
+                    else:
+                        continue
+        else:
+            page_paragraph_metadata_list = [
+                self._get_paragraph_metadata(page, layout)
+                for layout in page.layouts
+                if layout.category_name == "text"
+            ]
+
+        return page_paragraph_metadata_list
+
+    def _get_page_metadata(self) -> Tuple[List[Union[str, int]], List[Union[str, int]]]:
+        """
+        Gets page metadata including tables and paragraphs.
+
+        :param df: Document object returned from deepdoctection analyzer method
+        (assumed to be of any type)
+        :return: A tuple of lists containing table and paragraph metadata
+        """
+        doc_page_table_metadata_list: List[Union[str, int]] = []
+        doc_page_paragraph_metadata_list: List[Union[str, int]] = []
+
         for i, page in enumerate(self.pages):
-            tables.extend(self._detect_multipage_tables(page))
-            paragraphs.extend(self._detect_multipage_paragraphs(page))
+            # Get the table metadata for every page
+            doc_page_table_metadata_list.extend(self._get_page_table_metadata(page))
+            # Get the paragraph metadata for every page
+            doc_page_paragraph_metadata_list.extend(self._get_page_paragraph_metadata(page))
 
-        # self.multipage_entities.tables = tables
-        # self.multipage_entities.paragraphs = paragraphs
+        return doc_page_table_metadata_list, doc_page_paragraph_metadata_list
+
+    def _is_there_table(self, table_len: int) -> bool:
+        """
+        Checks if there is a table on the processed document page
+        :param int table_len: the number of tables found on the page
+        :return: True if the table_len is greater than 0, False otherwise
+        """
+        if table_len > 0:
+            return True
+        return False
+
+    def _get_page_bounding_box(
+            self, page_embeddings: Dict[Any, Any], page_id: Any
+    ) -> Dict[str, int]:
+        """
+        Gets the page bounding box information wrapped as a dictionary using the page metadata
+        :param page_embeddings: Dictionary containing page embeddings
+        :param page_id: Identifier of the page
+        :return: Dictionary of key-value pairs for the page bounding box coordinates
+        """
+        bbox_from_page = page_embeddings[page_id]
+        bbox = {
+            "x1": bbox_from_page.ulx,
+            "y1": bbox_from_page.uly,
+            "x2": bbox_from_page.lrx,
+            "y2": bbox_from_page.lry,
+        }
+        return bbox
+
+    def _is_paragraph_in_table(
+            self, paragraph_bbox: Dict[str, int], table_bboxes: List[Dict[str, int]]
+    ) -> bool:
+        """
+        Checks if a given paragraph bounding box falls within any of the tables' bounding boxes.
+
+        :param paragraph_bbox: Bounding box coordinates of the paragraph as a dictionary
+        {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2}
+        :param table_bboxes: List of dictionaries, each representing a table bounding box
+        {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2}
+        :return: True if the paragraph is within any of the tables, False otherwise
+        """
+        for table_bbox in table_bboxes:
+            if (
+                    table_bbox["x1"] <= paragraph_bbox["x1"] <= table_bbox["x2"]
+                    and table_bbox["y1"] <= paragraph_bbox["y1"] <= table_bbox["y2"]
+                    and table_bbox["x1"] <= paragraph_bbox["x2"] <= table_bbox["x2"]
+                    and table_bbox["y1"] <= paragraph_bbox["y2"] <= table_bbox["y2"]
+            ):
+                return True
+        return False
+
+    def _format_bbox(self, bbox: List[int]) -> Dict[str, int]:
+        """
+        Formats the table bounding boxes into a dictionary structure
+        :param table_bbox: List of bounding box coordinates in the format of [x1, y1, x2, y2]
+        :return: Dictionary containing the formatted bounding box coordinates
+        """
         return {
-            "tables": tables,
-            "paragraphs": paragraphs
+            "x1": bbox[0],
+            "y1": bbox[1],
+            "x2": bbox[2],
+            "y2": bbox[3],
         }
 
-    def _detect_multipage_tables(self, page: Page) -> List[Dict[str, Any]]:
+    def _get_paragraph_metadata(self, page, layout) -> Dict[str, Any]:
         """
-        Detects tables that span across multiple pages.
-        """
-        # Placeholder for table detection logic
-        return []
+        Get the metadata of a paragraph of a given layout element.
 
-    def _detect_multipage_paragraphs(self, page: Page) -> List[Dict[str, Any]]:
+        :param page: A given page in a document (assumed to be an instance of the Page class)
+        :param layout: The layout element representing the paragraph
+        (assumed to be an instance of the Layout class)
+        :return: A dictionary of the paragraph metadata
         """
-        Detects paragraphs that span across multiple pages.
-        """
-        # Placeholder for paragraph detection logic
-        return []
+        page_bbox = self._get_page_bounding_box(page.embeddings, page._image_id)
+        paragraph_metadata: Dict[str, Any] = {
+            "file_name": page.file_name,
+            "page_bbox": page_bbox,
+            "page_num": page.page_number + 1,
+            "document_id": page.document_id,
+            "page_height": page.height,
+            "page_width": page.width,
+            "text": layout.text,
+            "bbox": self._format_bbox(layout.bbox),
+            "reading_order": layout.reading_order,
+            "np_image": layout.np_image,
+        }
 
-    def read_pdf_bytes(self, pdf_file_path):
-        """
-        Reads a PDF file and returns its content as bytes.
+        return paragraph_metadata
 
-        Args:
-            pdf_file_path (str): The path to the PDF file to be read.
-
-        Returns:
-            bytes: The bytes content of the PDF file.
+    def _get_page_table_metadata(self, page) -> List[Dict[str, Any]]:
         """
-        try:
-            with open(pdf_file_path, "rb") as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                pdf_bytes = file.read()  # Read the entire PDF file as bytes
-                self.pdf_bytes = pdf_bytes
-        except FileNotFoundError:
-            print(f"The file {pdf_file_path} was not found.")
-            return None
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return None
+        Get the table metadata for a given page
+        :param page: page dataflow from the document iterable object
+        :return: a list of dictionary of the page table metadata
+        """
+        table_len: int = len(page.tables)
+
+        page_table_metadata_list: List[Dict[str, Any]] = []
+        if self._is_there_table(table_len):
+            page_bbox: Dict[str, int] = self._get_page_bounding_box(
+                page.embeddings, page._image_id
+            )
+            for table in page.tables:
+                table_bbox: Dict[str, int] = self._format_bbox(table.bbox)
+                page_table_metadata: Dict[str, Any] = {
+                    "file_name": page.file_name,
+                    "page_bbox": page_bbox,
+                    "page_num": page.page_number + 1,
+                    "document_id": page.document_id,
+                    "page_height": page.height,
+                    "page_width": page.width,
+                    "table_column_num": table.number_of_columns,
+                    "table_bbox": table_bbox,
+                }
+                page_table_metadata_list.append(page_table_metadata)
+
+        return page_table_metadata_list
+
+    def _get_lowest_page_num(self, doc_page_metadata_list: List[Dict[str, int]]) -> int:
+        """
+        Finds the lowest page number among the page numbers
+        :param doc_page_metadata_list: List of dictionary of the page entity metadata
+        :return: lowest page number value
+        """
+        page_num_list: List[int] = [
+            metadata["page_num"] for metadata in doc_page_metadata_list
+        ]
+        lowest_page_num = ""
+        if page_num_list:
+            lowest_page_num: int = min(page_num_list)
+        return lowest_page_num
+
+    def _get_page_table_data(
+            self, page_metadata_list: List[Dict[str, Any]], page_num: int
+    ) -> Dict[str, Any]:
+        """
+        Gets the page table entity metadata of the page number provided
+        :param page_metadata_list: List of page entity metadata
+        :param page_num: The page number value
+        :return: The page table metadata
+        """
+        for metadata in page_metadata_list:
+            if metadata["page_num"] == page_num:
+                return metadata
+        return None
+
+    def _delete_lowest_num_page_data(
+            self, page_metadata_list: List[Dict[str, Any]], lowest_page_num: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Removes the page table metadata of the lowest page number value
+        :param page_metadata_list: List of page entity metadata
+        :param lowest_page_num: The lowest page value in the page_metadata_list
+        :return: A page_metadata_list without the metadata of the lowest page number
+        """
+        return [
+            metadata
+            for metadata in page_metadata_list
+            if metadata["page_num"] != lowest_page_num
+        ]
+
+    def _get_comparable_pairs(
+            self, doc_page_metadata_list: List[Dict[str, Any]], lowest_page_num: int
+    ) -> List[List[Dict[str, Any]]]:
+        """
+        Gets comparable pairs, i.e., two sequential pages' metadata with the
+        same entity being compared
+        :param doc_page_metadata_list: List of page table metadata
+        :param lowest_page_num: The lowest page value in the doc_page_metadata_list
+        :return: List of list of two page table metadata
+        """
+        final_list: List[List[Dict[str, Any]]] = []
+        if doc_page_metadata_list:
+            for metadata in doc_page_metadata_list:
+                if isinstance(lowest_page_num, int):
+                    pair_list: List[Dict[str, Any]] = []
+                    next_page_num: int = lowest_page_num + 1
+                    lowest_num_metadata: Dict[str, Any] = self._get_page_table_data(
+                        doc_page_metadata_list, lowest_page_num
+                    )
+                    next_page_num_metadata: Dict[str, Any] = self._get_page_table_data(
+                        doc_page_metadata_list, next_page_num
+                    )
+                    if next_page_num_metadata is not None:
+                        pair_list.append(lowest_num_metadata)
+                        pair_list.append(next_page_num_metadata)
+                        final_list.append(pair_list)
+                        doc_page_metadata_list = self._delete_lowest_num_page_data(
+                            doc_page_metadata_list, lowest_page_num
+                        )
+                        lowest_page_num = self._get_lowest_page_num(doc_page_metadata_list)
+                    else:
+                        doc_page_metadata_list = self._delete_lowest_num_page_data(
+                            doc_page_metadata_list, lowest_page_num
+                        )
+                        lowest_page_num = self._get_lowest_page_num(doc_page_metadata_list)
+                else:
+                    continue
+        return final_list
+
+    def _is_close_to_footer(self, page_height: float, upper_y_coord: float) -> bool:
+        """
+        Determine if the entity is close to the page footer based on its bounding box coordinates,
+        page dimensions and
+        the assumed size of the footer.
+        :param page_height: Height of the page
+        :param upper_y_coord: Lower right coordinate of the y value; y1
+        :return: True if the entity is close to the page footer, False otherwise
+        """
+        # Calculate footer height
+        footer_height: float = 0.5 * page_height  # threshold based on experimentation
+
+        return upper_y_coord > footer_height
+
+    def _is_same_paragraph(self, pairs: List[Dict[str, Any]]) -> bool:
+        """
+        Checks if the paragraphs on the two pages are the same. That is the table on the
+        first page crosses to the other.
+
+        :param pairs: List of two pages' metadata, each represented as a dictionary
+        :return: True if the paragraphs are the same, False otherwise
+        """
+        first_page = pairs[0]
+        second_page = pairs[1]
+
+        if self._is_close_to_footer(
+                first_page["page_height"], first_page["bbox"]["y1"]
+        ) and self._is_close_to_header(second_page["page_height"], second_page["bbox"]["y2"]):
+            if self._not_end_with_fullstop(first_page["text"]):
+                return True
+            return False
+
+    def _not_end_with_fullstop(self, text: str) -> bool:
+        """
+        Checks if the text ends with a full stop.
+
+        :param text: The page chunk text (assumed to be a string)
+        :return: True if the text does not end with a full stop, False otherwise
+        """
+        if text == "" or len(text) == 1:
+            return False
+        elif not text.endswith("."):
+            return True
+        return False
+
+    def _is_close_to_header(self, page_height: float, lower_y_coord: float) -> bool:
+        """
+        Determine if the entity is close to the page header based on its bounding box coordinates,
+        page dimensions and the size of the header.
+        :param page_height: Height of the page
+        :param lower_y_coord: Upper coordinate of the y value; y2
+        :return: True if the entity is close to the page header, False otherwise
+        """
+        # Calculate header height
+        header_height: float = 0.5 * page_height  # threshold based on experimentation
+
+        return lower_y_coord < header_height
+
+    def _is_same_table(self, pairs: List[Dict[str, Any]]) -> bool:
+        """
+        Checks if the table on the two pages are the same. That is the table on the
+        first page crosses to the other
+        :param pairs: List of two dictionaries representing metadata for two pages
+        :return: True if the tables are the same, False otherwise
+        """
+        first_page: Dict[str, Any] = pairs[0]
+        second_page: Dict[str, Any] = pairs[1]
+
+        if self._is_close_to_footer(
+                first_page["page_height"], first_page["table_bbox"]["y1"]
+        ) and self._is_close_to_header(
+            second_page["page_height"], second_page["table_bbox"]["y2"]
+        ):
+            if first_page["table_column_num"] == second_page["table_column_num"]:
+                return True
+            return False
+
+    def _comparable_pairs(
+            self, doc_page_metadata_list: List[Dict[str, Any]]
+    ) -> List[List[Dict[str, Any]]]:
+        """
+        Gets the comparable pairs by getting the lowest page num to find the two sequential pages
+        :param doc_page_metadata_list: List of page entity metadata
+        :return: List of comparable pairs
+        """
+        # Get the lowest page value from the list of the page metadata
+        lowest_page_num: int = self._get_lowest_page_num(doc_page_metadata_list)
+
+        list_comparable_pairs: List[List[Dict[str, Any]]] = self._get_comparable_pairs(
+            doc_page_metadata_list, lowest_page_num
+        )
+        return list_comparable_pairs
+
+    def _get_same_entities(
+            self, metadata_list: List[Any], is_same_function: Callable[[List[Any]], bool]
+    ) -> Dict[str, Any]:
+        """
+        Gets the multipage entities of a type implemented in the is_same_function.
+
+        :param metadata_list: A list of the entity metadata
+        :param is_same_function: A function to check for the multipage entity of a type
+        :return: A dictionary of identified multipage entities
+        """
+        entity_result: Dict[str, Any] = {}
+
+        if metadata_list:
+            idx = 0
+            comparable_pairs_list = self._comparable_pairs(metadata_list)
+            if comparable_pairs_list:
+                for pairs in comparable_pairs_list:
+                    comparison = is_same_function(pairs)
+                    if comparison:
+                        entity_result[str(idx)] = (pairs[0], pairs[1])
+                        idx += 1
+        return entity_result
+
+    def detect_multi_page_entities(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Detects multi-page entities from the given document object.
+        :param df: Document object returned from deepdoctection analyzer method
+        (assumed to be of any type)
+        :return: A dictionary containing multi-page entities, categorized as "table" or "text"
+        """
+        final_result = {}
+        doc_table_metadata_list, doc_paragraph_metadata_list = self._get_page_metadata()
+
+        if doc_table_metadata_list:
+            table_result = self._get_same_entities(doc_table_metadata_list, self._is_same_table)
+            if table_result:
+                final_result["table"] = table_result
+
+        if doc_paragraph_metadata_list:
+            paragraph_result = self._get_same_entities(
+                doc_paragraph_metadata_list, self._is_same_paragraph
+            )
+            if paragraph_result:
+                final_result["text"] = paragraph_result
+
+        return final_result
 
     @staticmethod
     def from_pages(pages: List[Page]) -> "Document":
         return Document(pages)
-
-
-class Document:
-    def __init__(self, pdf_file_path=None):
-        self.pages = []
-        self.xfa_data = None
-        if pdf_file_path:
-            self.load_xfa_data(pdf_file_path)
-
-    def load_xfa_data(self, pdf_file_path):
-        """
-        Loads XFA data from a PDF file and stores it in the document attribute.
-
-        Args:
-            pdf_file_path (str): Path to the PDF file.
-        """
-        try:
-            with open(pdf_file_path, "rb") as file:
-                parser = PDFParser(file)
-                doc = PDFDocument(parser)
-                xfa = resolve1(doc.catalog['AcroForm'])['XFA']
-                xfa_data = [resolve1(x).get_data().decode() for n, x in enumerate(xfa) if n % 2 == 1]
-                self.xfa_data = self._process_xfa_data(xfa_data)
-        except Exception as e:
-            print(f"Failed to load XFA data from {pdf_file_path}: {e}")
-
-    @staticmethod
-    def _process_xfa_data(xfa_data):
-        """
-        Process the XFA data to extract form fields and values.
-
-        Args:
-            xfa_data (list): List of strings representing the XFA data.
-
-        Returns:
-            dict: Processed XFA data.
-        """
-        # Concatenate XFA data and parse XML
-        xstr = "".join(xfa_data)
-        root = ET.fromstring(xstr)
-
-        # Extract namespaces (simplified version)
-        namespaces = {elem.tag.split('}')[-1]: ns for elem in root.iter() if '}' in elem.tag}
-
-        # Example processing - you can expand this based on your needs
-        fields = {}
-        for field in root.findall('.//field', namespaces):
-            name = field.get('name')
-            value = field.text or ''
-            fields[name] = value
-
-        return fields

@@ -1,5 +1,6 @@
 import os
 from deepdoctection.analyzer import dd
+from deepdoctection.datapoint.view import Document
 
 config_overwrite = [
         "PT.LAYOUT.WEIGHTS=microsoft/table-transformer-detection/pytorch_model.bin",
@@ -14,13 +15,24 @@ analyzer = dd.get_dd_analyzer(config_overwrite=config_overwrite)
 current_dir: str = os.getcwd()
 files_folder = "test_files"
 file_name = "PMC509421.pdf" # Change this to a single page file for testing
+complex_file = "K211754-002_System Test Report.pdf"
 
-file_path = os.path.join(current_dir, files_folder, file_name)
+file_path = os.path.join(current_dir, files_folder, complex_file) # This can be altered for testing
 
 df = analyzer.analyze(path=file_path)
 
 df.reset_state()  # Part of Deepdoctection API
 
+pages = []
 for page in list(iter(df)):
-    print(page)
+    pages.append(page)
 
+# Instantiate the Document with collected pages
+document = Document.from_pages(pages)
+
+# Attempt to detect multipage entities
+multipage_entities = document.detect_multi_page_entities()
+
+# You might want to do something with `multipage_entities` here
+print("======= Multipage entities =======")
+print(multipage_entities)
