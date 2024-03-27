@@ -917,7 +917,8 @@ class Document:
         self.decision_funcs = self.define_multipage_entity_decision_functions()
 
     
-    def define_multipage_entity_decision_functions(self, cfg)
+    def define_multipage_entity_decision_functions(self):
+        pass
     
     
     def get_multipage_entities(self) -> Dict[str, List[Dict[str, Any]]]:
@@ -979,5 +980,3 @@ class Document:
     @staticmethod
     def from_pages(pages: List[Page]) -> "Document":
         return Document(pages)
-
-    # Additional methods as needed
