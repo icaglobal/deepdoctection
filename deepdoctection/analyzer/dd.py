@@ -28,13 +28,16 @@ from os import environ
 from shutil import copyfile
 from typing import List, Optional, Union
 
+from ..datapoint.image import Image
+from ..datapoint.annotation import ImageAnnotation
+
 from ..extern.base import ObjectDetector
 from ..extern.doctrocr import DoctrTextlineDetector, DoctrTextRecognizer
 from ..extern.model import ModelCatalog, ModelDownloadManager
 from ..extern.pdftext import PdfPlumberTextDetector
 from ..extern.tessocr import TesseractOcrDetector
 from ..extern.texocr import TextractOcrDetector
-# from ..pipe.link import MultiPageLinkingService # This is the new addition
+from ..pipe.link import MultiPageLinkingService  # This is the new addition
 from ..pipe.base import PipelineComponent
 from ..pipe.cell import DetectResultGenerator, SubImageLayoutService
 from ..pipe.common import AnnotationNmsService, MatchingService, PageParsingService
@@ -390,25 +393,22 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         pipe_component_list.append(order)
 
     # Invoke the multipage linking service - not conditional
-    """
     multi_page = MultiPageLinkingService([
-    {
-        'category_names': {
-            LayoutType.word: ImageAnnotation(), # maybe?
-            ImageAnnotation(): ImageAnnotation() # Placeholder
+        {
+            'category_names': {
+                LayoutType.word: ImageAnnotation(),  # maybe?
+                ImageAnnotation(): ImageAnnotation()  # Placeholder
+            }
+        },
+        {
+            'func': {
+                Image(id=1): Image(id=2),  # Placeholder
+                Image(id=3): Image(id=4)
+            }
         }
-    },
-    {
-        'func': {
-            Image(id=1): Image(id=2), # Placeholder
-            Image(id=3): Image(id=4)
-        }
-    }
     ])
 
     pipe_component_list.append(multi_page)
-    ###
-    """
 
     page_parsing_service = PageParsingService(
         text_container=LayoutType.word,
