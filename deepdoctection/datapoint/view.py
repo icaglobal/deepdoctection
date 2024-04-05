@@ -1074,6 +1074,7 @@ class Document:
                     "page_width": page.width,
                     "table_column_num": table.number_of_columns,
                     "table_bbox": table_bbox,
+                    "reading_order": table.reading_order,
                 }
                 page_table_metadata_list.append(page_table_metadata)
 
@@ -1288,11 +1289,15 @@ class Document:
         doc_table_metadata_list, doc_paragraph_metadata_list = self._get_page_metadata()
 
         if doc_table_metadata_list:
+            print("table metadata")
+            print(doc_table_metadata_list)
             table_result = self._get_same_entities(doc_table_metadata_list, self._is_same_table)
             if table_result:
                 final_result["table"] = table_result
 
         if doc_paragraph_metadata_list:
+            # print("paragraph metadata")
+            # print(doc_paragraph_metadata_list)
             paragraph_result = self._get_same_entities(
                 doc_paragraph_metadata_list, self._is_same_paragraph
             )

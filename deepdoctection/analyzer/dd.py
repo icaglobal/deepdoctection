@@ -37,7 +37,6 @@ from ..extern.model import ModelCatalog, ModelDownloadManager
 from ..extern.pdftext import PdfPlumberTextDetector
 from ..extern.tessocr import TesseractOcrDetector
 from ..extern.texocr import TextractOcrDetector
-from ..pipe.link import MultiPageLinkingService  # This is the new addition
 from ..pipe.base import PipelineComponent
 from ..pipe.cell import DetectResultGenerator, SubImageLayoutService
 from ..pipe.common import AnnotationNmsService, MatchingService, PageParsingService
@@ -73,6 +72,7 @@ if pytorch_available():
 if boto3_available():
     from botocore.config import Config  # type: ignore
 
+
 __all__ = [
     "maybe_copy_config_to_cache",
     "config_sanity_checks",
@@ -91,7 +91,7 @@ _TESSERACT = "deepdoctection/configs/conf_tesseract.yaml"
 
 
 def maybe_copy_config_to_cache(
-        package_path: Pathlike, configs_dir_path: Pathlike, file_name: str, force_copy: bool = True
+    package_path: Pathlike, configs_dir_path: Pathlike, file_name: str, force_copy: bool = True
 ) -> str:
     """
     Initial copying of various files
@@ -124,7 +124,7 @@ def config_sanity_checks(cfg: AttrDict) -> None:
 
 
 def build_detector(
-        cfg: AttrDict, mode: str
+    cfg: AttrDict, mode: str
 ) -> Union["D2FrcnnDetector", "TPFrcnnDetector", "HFDetrDerivedDetector", "D2FrcnnTracingDetector"]:
     """Building a D2-Detector, a TP-Detector as Detr-Detector or a D2-Torch Tracing Detector according to
     the config
@@ -282,7 +282,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         if not detectron2_available() and cfg.LIB == "PT":
             raise ModuleNotFoundError("LAYOUT_NMS_PAIRS is only available for detectron2")
         if not isinstance(cfg.LAYOUT_NMS_PAIRS.COMBINATIONS, list) and not isinstance(
-                cfg.LAYOUT_NMS_PAIRS.COMBINATIONS[0], list
+            cfg.LAYOUT_NMS_PAIRS.COMBINATIONS[0], list
         ):
             raise ValueError("LAYOUT_NMS_PAIRS mus be a list of lists")
         layout_nms_serivce = AnnotationNmsService(
@@ -392,24 +392,6 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         )
         pipe_component_list.append(order)
 
-    # Invoke the multipage linking service - not conditional
-    multi_page = MultiPageLinkingService([
-        {
-            'category_names': {
-                LayoutType.word: ImageAnnotation(),  # maybe?
-                ImageAnnotation(): ImageAnnotation()  # Placeholder
-            }
-        },
-        {
-            'func': {
-                Image(id=1): Image(id=2),  # Placeholder
-                Image(id=3): Image(id=4)
-            }
-        }
-    ])
-
-    pipe_component_list.append(multi_page)
-
     page_parsing_service = PageParsingService(
         text_container=LayoutType.word,
         floating_text_block_categories=cfg.TEXT_ORDERING.FLOATING_TEXT_BLOCK_CATEGORIES,
@@ -421,9 +403,9 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
 
 
 def get_dd_analyzer(
-        reset_config_file: bool = False,
-        config_overwrite: Optional[List[str]] = None,
-        path_config_file: Optional[Pathlike] = None,
+    reset_config_file: bool = False,
+    config_overwrite: Optional[List[str]] = None,
+    path_config_file: Optional[Pathlike] = None,
 ) -> DoctectionPipe:
     """
     Factory function for creating the built-in **deep**doctection analyzer.
