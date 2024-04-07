@@ -1108,60 +1108,94 @@ class Document:
                 return metadata
         return None
 
-    def _delete_lowest_num_page_data(
-            self, page_metadata_list: List[Dict[str, Any]], lowest_page_num: int
-    ) -> List[Dict[str, Any]]:
+    def _delete_processed_data(
+        self, page_metadata_list: List[Dict[str, Any]], unique_id: float) -> List[Dict[str, Any]]:
         """
         Removes the page table metadata of the lowest page number value
         :param page_metadata_list: List of page entity metadata
-        :param lowest_page_num: The lowest page value in the page_metadata_list
+        :param unique_id: The unique id of the object
         :return: A page_metadata_list without the metadata of the lowest page number
         """
         return [
             metadata
             for metadata in page_metadata_list
-            if metadata["page_num"] != lowest_page_num
+            if
+            (metadata["bbox"]["x1"] + metadata["bbox"]["y1"] + metadata["bbox"]["x2"] + metadata["bbox"]["y2"]) != unique_id
         ]
+    
+    def _get_unique_id(self, bbox):
+        """
+        Gets the unique_id of an object (table or paragraph) by adding all its bounding box cordinates
+        params: bbox: bounding box dictionary
+        :return: unique_id
+        """
+        unique_id = bbox["x1"] + bbox["y1"] + bbox["x2"] + bbox["y2"]
+        return unique_id
 
-    def _get_comparable_pairs(
-            self, doc_page_metadata_list: List[Dict[str, Any]], lowest_page_num: int
-    ) -> List[List[Dict[str, Any]]]:
+    def _map_pairs(self, close_to_footer_list, close_to_header_list) -> List[List[Any]]:
+        """
+        Maps the close to footer with close to header to establish linked relationship
+        :param close_to_footer_list: List of metadata of entities close to the footer
+        :param close_to_header_list: List of metadata of entities close to the header
+        :return: List of comparable pairs' lists
+        """
+        mapped_pairs: List[Any] = []
+        for i in close_to_footer_list:
+            for j in close_to_header_list:
+                pairs: List[Any] = [i, j]
+                mapped_pairs.append(pairs)
+        return mapped_pairs
+        
+    def _get_comparable_pairs(self, doc_page_metadata_list: List[Dict[str, Any]], lowest_page_num: int
+                         ) -> List[List[Dict[str, Any]]]:
         """
         Gets comparable pairs, i.e., two sequential pages' metadata with the
         same entity being compared
         :param doc_page_metadata_list: List of page table metadata
         :param lowest_page_num: The lowest page value in the doc_page_metadata_list
-        :return: List of list of two page table metadata
+        :return: List of list two-page table metadata or empty list
         """
-        final_list: List[List[Dict[str, Any]]] = []
         if doc_page_metadata_list:
-            for metadata in doc_page_metadata_list:
+            close_to_footer_list: List[Dict[str, Any]] = []
+            close_to_header_list: List[Dict[str, Any]] = []
+            for _ in doc_page_metadata_list:
                 if isinstance(lowest_page_num, int):
-                    pair_list: List[Dict[str, Any]] = []
                     next_page_num: int = lowest_page_num + 1
                     lowest_num_metadata: Dict[str, Any] = self._get_page_table_data(
                         doc_page_metadata_list, lowest_page_num
                     )
+                    if self._is_close_to_footer(lowest_num_metadata["page_height"], lowest_num_metadata["bbox"]["y1"]):
+                        close_to_footer_list.append(lowest_num_metadata)
+                    metadata_unique_id = self._get_unique_id(lowest_num_metadata["bbox"])
+    
+                    doc_page_metadata_list = self._delete_processed_data(
+                        doc_page_metadata_list, metadata_unique_id
+                    )
+                    lowest_page_num = self._get_lowest_page_num(doc_page_metadata_list)
+    
                     next_page_num_metadata: Dict[str, Any] = self._get_page_table_data(
                         doc_page_metadata_list, next_page_num
                     )
                     if next_page_num_metadata is not None:
-                        pair_list.append(lowest_num_metadata)
-                        pair_list.append(next_page_num_metadata)
-                        final_list.append(pair_list)
-                        doc_page_metadata_list = self._delete_lowest_num_page_data(
-                            doc_page_metadata_list, lowest_page_num
+                        if self._is_close_to_header(next_page_num_metadata["page_height"], next_page_num_metadata["bbox"]["y2"]):
+                            close_to_header_list.append(next_page_num_metadata)
+    
+                        metadata_unique_id = self._get_unique_id(next_page_num_metadata["bbox"])
+    
+                        doc_page_metadata_list = self._delete_processed_data(
+                            doc_page_metadata_list, metadata_unique_id
                         )
                         lowest_page_num = self._get_lowest_page_num(doc_page_metadata_list)
                     else:
-                        doc_page_metadata_list = self._delete_lowest_num_page_data(
-                            doc_page_metadata_list, lowest_page_num
-                        )
-                        lowest_page_num = self._get_lowest_page_num(doc_page_metadata_list)
+                        continue
                 else:
                     continue
-        return final_list
+            if close_to_footer_list and close_to_header_list:
+                return self._map_pairs(close_to_footer_list, close_to_header_list)
+            else:
+                return []
 
+                             
     def _is_close_to_footer(self, page_height: float, upper_y_coord: float) -> bool:
         """
         Determine if the entity is close to the page footer based on its bounding box coordinates,
@@ -1180,17 +1214,17 @@ class Document:
         """
         Checks if the paragraphs on the two pages are the same. That is the table on the
         first page crosses to the other.
-
+    
         :param pairs: List of two pages' metadata, each represented as a dictionary
         :return: True if the paragraphs are the same, False otherwise
         """
         first_page = pairs[0]
         second_page = pairs[1]
-
+    
         if self._is_close_to_footer(
                 first_page["page_height"], first_page["bbox"]["y1"]
         ) and self._is_close_to_header(second_page["page_height"], second_page["bbox"]["y2"]):
-            if self._not_end_with_fullstop(first_page["text"]):
+            if self._not_end_with_fullstop(first_page["text"]) and not second_page["text"][0].isupper():
                 return True
             return False
 
