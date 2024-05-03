@@ -316,7 +316,7 @@ class Table(Layout):
         table_list = [["" for _ in range(self.number_of_columns)] for _ in range(self.number_of_rows)]  # type: ignore
         for cell in cells:
             table_list[cell.row_number - 1][cell.column_number - 1] = (  # type: ignore
-                    table_list[cell.row_number - 1][cell.column_number - 1] + cell.text + " "  # type: ignore
+                table_list[cell.row_number - 1][cell.column_number - 1] + cell.text + " "  # type: ignore
             )
         return table_list
 
@@ -456,10 +456,10 @@ class Page(Image):
 
     @no_type_check
     def get_annotation(
-            self,
-            category_names: Optional[Union[str, ObjectTypes, Sequence[Union[str, ObjectTypes]]]] = None,
-            annotation_ids: Optional[Union[str, Sequence[str]]] = None,
-            annotation_types: Optional[Union[str, Sequence[str]]] = None,
+        self,
+        category_names: Optional[Union[str, ObjectTypes, Sequence[Union[str, ObjectTypes]]]] = None,
+        annotation_ids: Optional[Union[str, Sequence[str]]] = None,
+        annotation_types: Optional[Union[str, Sequence[str]]] = None,
     ) -> List[ImageAnnotationBaseView]:
         """
         Identical to its base class method for having correct return types. If the base class changes, please
@@ -521,12 +521,12 @@ class Page(Image):
 
     @classmethod
     def from_image(
-            cls,
-            image_orig: Image,
-            text_container: Optional[ObjectTypes] = None,
-            floating_text_block_categories: Optional[Sequence[ObjectTypes]] = None,
-            include_residual_text_container: bool = True,
-            base_page: Optional["Page"] = None,
+        cls,
+        image_orig: Image,
+        text_container: Optional[ObjectTypes] = None,
+        floating_text_block_categories: Optional[Sequence[ObjectTypes]] = None,
+        include_residual_text_container: bool = True,
+        base_page: Optional["Page"] = None,
     ) -> "Page":
         """
         Factory function for generating a `Page` instance from `image_orig` .
@@ -639,8 +639,8 @@ class Page(Image):
         block_with_order = self._order("layouts")
         position = block_with_order.index(ann)
         return block_with_order[
-               max(0, position - context_size): min(position + context_size + 1, len(block_with_order))
-               ]
+            max(0, position - context_size) : min(position + context_size + 1, len(block_with_order))
+        ]
 
     @property
     def chunks(self) -> List[Tuple[str, str, int, str, str, str, str]]:
@@ -685,16 +685,16 @@ class Page(Image):
 
     @no_type_check
     def viz(
-            self,
-            show_tables: bool = True,
-            show_layouts: bool = True,
-            show_cells: bool = True,
-            show_table_structure: bool = True,
-            show_words: bool = False,
-            show_token_class: bool = True,
-            ignore_default_token_class: bool = False,
-            interactive: bool = False,
-            **debug_kwargs: str,
+        self,
+        show_tables: bool = True,
+        show_layouts: bool = True,
+        show_cells: bool = True,
+        show_table_structure: bool = True,
+        show_words: bool = False,
+        show_token_class: bool = True,
+        ignore_default_token_class: bool = False,
+        interactive: bool = False,
+        **debug_kwargs: str,
     ) -> Optional[ImageType]:
         """
         Display a page with detected bounding boxes of various types.
@@ -849,11 +849,11 @@ class Page(Image):
         cls._attribute_names.add(attribute_name.value)
 
     def save(
-            self,
-            image_to_json: bool = True,
-            highest_hierarchy_only: bool = False,
-            path: Optional[Pathlike] = None,
-            dry: bool = False,
+        self,
+        image_to_json: bool = True,
+        highest_hierarchy_only: bool = False,
+        path: Optional[Pathlike] = None,
+        dry: bool = False,
     ) -> Optional[JsonDict]:
         """
         Export image as dictionary. As numpy array cannot be serialized `image` values will be converted into
@@ -871,11 +871,11 @@ class Page(Image):
     @classmethod
     @no_type_check
     def from_file(
-            cls,
-            file_path: str,
-            text_container: Optional[ObjectTypes] = None,
-            floating_text_block_categories: Optional[List[ObjectTypes]] = None,
-            include_residual_text_container: bool = True,
+        cls,
+        file_path: str,
+        text_container: Optional[ObjectTypes] = None,
+        floating_text_block_categories: Optional[List[ObjectTypes]] = None,
+        include_residual_text_container: bool = True,
     ) -> "Page":
         """Reading JSON file and building a `Page` object with given config.
         :param file_path: Path to file
@@ -905,8 +905,7 @@ class Document:
     """
     Represents a higher-level concept of a document, potentially encompassing multiple pages.
     """
-
-    def __init__(self, pages: List[Page],
+    def __init__(self, pages: List[Page], 
                  ):
         self.pages = pages
 
@@ -942,6 +941,7 @@ class Document:
             ]
 
         return page_paragraph_metadata_list
+    
 
     def _get_page_metadata(self) -> Tuple[List[Union[str, int]], List[Union[str, int]]]:
         """
@@ -973,7 +973,7 @@ class Document:
         return False
 
     def _get_page_bounding_box(
-            self, page_embeddings: Dict[Any, Any], page_id: Any
+        self, page_embeddings: Dict[Any, Any], page_id: Any
     ) -> Dict[str, int]:
         """
         Gets the page bounding box information wrapped as a dictionary using the page metadata
@@ -990,8 +990,9 @@ class Document:
         }
         return bbox
 
+
     def _is_paragraph_in_table(
-            self, paragraph_bbox: Dict[str, int], table_bboxes: List[Dict[str, int]]
+        self, paragraph_bbox: Dict[str, int], table_bboxes: List[Dict[str, int]]
     ) -> bool:
         """
         Checks if a given paragraph bounding box falls within any of the tables' bounding boxes.
@@ -1004,10 +1005,10 @@ class Document:
         """
         for table_bbox in table_bboxes:
             if (
-                    table_bbox["x1"] <= paragraph_bbox["x1"] <= table_bbox["x2"]
-                    and table_bbox["y1"] <= paragraph_bbox["y1"] <= table_bbox["y2"]
-                    and table_bbox["x1"] <= paragraph_bbox["x2"] <= table_bbox["x2"]
-                    and table_bbox["y1"] <= paragraph_bbox["y2"] <= table_bbox["y2"]
+                table_bbox["x1"] <= paragraph_bbox["x1"] <= table_bbox["x2"]
+                and table_bbox["y1"] <= paragraph_bbox["y1"] <= table_bbox["y2"]
+                and table_bbox["x1"] <= paragraph_bbox["x2"] <= table_bbox["x2"]
+                and table_bbox["y1"] <= paragraph_bbox["y2"] <= table_bbox["y2"]
             ):
                 return True
         return False
@@ -1050,6 +1051,7 @@ class Document:
 
         return paragraph_metadata
 
+
     def _get_page_table_metadata(self, page) -> List[Dict[str, Any]]:
         """
         Get the table metadata for a given page
@@ -1073,12 +1075,13 @@ class Document:
                     "page_height": page.height,
                     "page_width": page.width,
                     "table_column_num": table.number_of_columns,
-                    "table_bbox": table_bbox,
+                    "bbox": table_bbox,
                     "reading_order": table.reading_order,
                 }
                 page_table_metadata_list.append(page_table_metadata)
 
         return page_table_metadata_list
+
 
     def _get_lowest_page_num(self, doc_page_metadata_list: List[Dict[str, int]]) -> int:
         """
@@ -1094,8 +1097,9 @@ class Document:
             lowest_page_num: int = min(page_num_list)
         return lowest_page_num
 
+
     def _get_page_table_data(
-            self, page_metadata_list: List[Dict[str, Any]], page_num: int
+        self, page_metadata_list: List[Dict[str, Any]], page_num: int
     ) -> Dict[str, Any]:
         """
         Gets the page table entity metadata of the page number provided
@@ -1109,21 +1113,23 @@ class Document:
         return None
 
     def _delete_processed_data(
-        self, page_metadata_list: List[Dict[str, Any]], unique_id: float) -> List[Dict[str, Any]]:
+        self, page_metadata_list: List[Dict[str, Any]], unique_id: float
+    ) -> List[Dict[str, Any]]:
         """
-        Removes the page table metadata of the lowest page number value
+        Removes the page table metadata of the  unique id (computed by the sum of object bbox cordinates) number value
         :param page_metadata_list: List of page entity metadata
         :param unique_id: The unique id of the object
         :return: A page_metadata_list without the metadata of the lowest page number
         """
+
         return [
             metadata
             for metadata in page_metadata_list
             if
             (metadata["bbox"]["x1"] + metadata["bbox"]["y1"] + metadata["bbox"]["x2"] + metadata["bbox"]["y2"]) != unique_id
         ]
-    
-    def _get_unique_id(self, bbox):
+
+    def _get_unique_id(self, bbox: Dict[str, Any]):
         """
         Gets the unique_id of an object (table or paragraph) by adding all its bounding box cordinates
         params: bbox: bounding box dictionary
@@ -1131,8 +1137,8 @@ class Document:
         """
         unique_id = bbox["x1"] + bbox["y1"] + bbox["x2"] + bbox["y2"]
         return unique_id
-
-    def _map_pairs(self, close_to_footer_list, close_to_header_list) -> List[List[Any]]:
+    
+    def _map_pairs(self, close_to_footer_list: List[Dict[str, Any]], close_to_header_list: List[Dict[str, Any]]) -> List[List[Any]]:
         """
         Maps the close to footer with close to header to establish linked relationship
         :param close_to_footer_list: List of metadata of entities close to the footer
@@ -1145,19 +1151,22 @@ class Document:
                 pairs: List[Any] = [i, j]
                 mapped_pairs.append(pairs)
         return mapped_pairs
-        
-    def _get_comparable_pairs(self, doc_page_metadata_list: List[Dict[str, Any]], lowest_page_num: int
-                         ) -> List[List[Dict[str, Any]]]:
+
+
+    def _get_comparable_pairs(
+        self, doc_page_metadata_list: List[Dict[str, Any]], lowest_page_num: int
+    ) -> List[List[Dict[str, Any]]]:
         """
         Gets comparable pairs, i.e., two sequential pages' metadata with the
         same entity being compared
         :param doc_page_metadata_list: List of page table metadata
         :param lowest_page_num: The lowest page value in the doc_page_metadata_list
-        :return: List of list two-page table metadata or empty list
+        :return: List of list of two page table metadata
         """
         if doc_page_metadata_list:
             close_to_footer_list: List[Dict[str, Any]] = []
             close_to_header_list: List[Dict[str, Any]] = []
+
             for _ in doc_page_metadata_list:
                 if isinstance(lowest_page_num, int):
                     next_page_num: int = lowest_page_num + 1
@@ -1167,21 +1176,21 @@ class Document:
                     if self._is_close_to_footer(lowest_num_metadata["page_height"], lowest_num_metadata["bbox"]["y1"]):
                         close_to_footer_list.append(lowest_num_metadata)
                     metadata_unique_id = self._get_unique_id(lowest_num_metadata["bbox"])
-    
+
                     doc_page_metadata_list = self._delete_processed_data(
                         doc_page_metadata_list, metadata_unique_id
                     )
                     lowest_page_num = self._get_lowest_page_num(doc_page_metadata_list)
-    
+
                     next_page_num_metadata: Dict[str, Any] = self._get_page_table_data(
                         doc_page_metadata_list, next_page_num
                     )
                     if next_page_num_metadata is not None:
                         if self._is_close_to_header(next_page_num_metadata["page_height"], next_page_num_metadata["bbox"]["y2"]):
                             close_to_header_list.append(next_page_num_metadata)
-    
+
                         metadata_unique_id = self._get_unique_id(next_page_num_metadata["bbox"])
-    
+
                         doc_page_metadata_list = self._delete_processed_data(
                             doc_page_metadata_list, metadata_unique_id
                         )
@@ -1195,7 +1204,7 @@ class Document:
             else:
                 return []
 
-                             
+
     def _is_close_to_footer(self, page_height: float, upper_y_coord: float) -> bool:
         """
         Determine if the entity is close to the page footer based on its bounding box coordinates,
@@ -1210,26 +1219,29 @@ class Document:
 
         return upper_y_coord > footer_height
 
+
     def _is_same_paragraph(self, pairs: List[Dict[str, Any]]) -> bool:
         """
         Checks if the paragraphs on the two pages are the same. That is the table on the
         first page crosses to the other.
-    
+
         :param pairs: List of two pages' metadata, each represented as a dictionary
         :return: True if the paragraphs are the same, False otherwise
         """
         first_page = pairs[0]
         second_page = pairs[1]
-    
+
         if self._is_close_to_footer(
-                first_page["page_height"], first_page["bbox"]["y1"]
+            first_page["page_height"], first_page["bbox"]["y1"]
         ) and self._is_close_to_header(second_page["page_height"], second_page["bbox"]["y2"]):
-            if self._not_end_with_fullstop(first_page["text"]) and not second_page["text"][0].isupper():
-                return True
+            if first_page["page_num"] == second_page["page_num"] - 1:
+                if self._not_end_with_fullstop(first_page["text"]) and not second_page["text"][0].isupper():
+                    return True
             return False
 
+
     def _not_end_with_fullstop(self, text: str) -> bool:
-        """
+        """ 
         Checks if the text ends with a full stop.
 
         :param text: The page chunk text (assumed to be a string)
@@ -1240,6 +1252,7 @@ class Document:
         elif not text.endswith("."):
             return True
         return False
+
 
     def _is_close_to_header(self, page_height: float, lower_y_coord: float) -> bool:
         """
@@ -1254,6 +1267,7 @@ class Document:
 
         return lower_y_coord < header_height
 
+
     def _is_same_table(self, pairs: List[Dict[str, Any]]) -> bool:
         """
         Checks if the table on the two pages are the same. That is the table on the
@@ -1265,16 +1279,18 @@ class Document:
         second_page: Dict[str, Any] = pairs[1]
 
         if self._is_close_to_footer(
-                first_page["page_height"], first_page["table_bbox"]["y1"]
+            first_page["page_height"], first_page["bbox"]["y1"]
         ) and self._is_close_to_header(
-            second_page["page_height"], second_page["table_bbox"]["y2"]
+            second_page["page_height"], second_page["bbox"]["y2"]
         ):
             if first_page["table_column_num"] == second_page["table_column_num"]:
-                return True
+                if first_page["page_num"] == second_page["page_num"] - 1:
+                    return True
             return False
 
+
     def _comparable_pairs(
-            self, doc_page_metadata_list: List[Dict[str, Any]]
+        self, doc_page_metadata_list: List[Dict[str, Any]]
     ) -> List[List[Dict[str, Any]]]:
         """
         Gets the comparable pairs by getting the lowest page num to find the two sequential pages
@@ -1289,8 +1305,9 @@ class Document:
         )
         return list_comparable_pairs
 
+
     def _get_same_entities(
-            self, metadata_list: List[Any], is_same_function: Callable[[List[Any]], bool]
+        self, metadata_list: List[Any], is_same_function: Callable[[List[Any]], bool]
     ) -> Dict[str, Any]:
         """
         Gets the multipage entities of a type implemented in the is_same_function.
@@ -1312,6 +1329,7 @@ class Document:
                         idx += 1
         return entity_result
 
+
     def detect_multi_page_entities(self) -> Dict[str, Dict[str, Any]]:
         """
         Detects multi-page entities from the given document object.
@@ -1319,19 +1337,15 @@ class Document:
         (assumed to be of any type)
         :return: A dictionary containing multi-page entities, categorized as "table" or "text"
         """
-        final_result = {}
+        final_result: Dict[str, Any] = {}
         doc_table_metadata_list, doc_paragraph_metadata_list = self._get_page_metadata()
 
         if doc_table_metadata_list:
-            print("table metadata")
-            print(doc_table_metadata_list)
             table_result = self._get_same_entities(doc_table_metadata_list, self._is_same_table)
             if table_result:
                 final_result["table"] = table_result
 
         if doc_paragraph_metadata_list:
-            # print("paragraph metadata")
-            # print(doc_paragraph_metadata_list)
             paragraph_result = self._get_same_entities(
                 doc_paragraph_metadata_list, self._is_same_paragraph
             )
@@ -1340,6 +1354,7 @@ class Document:
 
         return final_result
 
+        
     @staticmethod
     def from_pages(pages: List[Page]) -> "Document":
         return Document(pages)
