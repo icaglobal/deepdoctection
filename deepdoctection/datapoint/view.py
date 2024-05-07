@@ -918,6 +918,7 @@ class Document:
         :return: A list of dictionaries of the page paragraph metadata
         """
         table_len = len(page.tables)
+
         page_paragraph_metadata_list: List[Dict[str, Any]] = []
 
         if self._is_there_table(table_len):
@@ -1215,7 +1216,7 @@ class Document:
         :return: True if the entity is close to the page footer, False otherwise
         """
         # Calculate footer height
-        footer_height: float = 0.5 * page_height  # threshold based on experimentation
+        footer_height: float = 0.8 * page_height  # threshold based on experimentation
 
         return upper_y_coord > footer_height
 
