@@ -50,6 +50,15 @@ def test_get_page_bounding_box():
         document._get_page_bounding_box(page_embeddings, page_id)
 
 
+def test_get_unique_id():
+
+    # Test data
+    bbox = {"x1": 50, "y1": 60, "x2": 150, "y2": 250}
+
+    expected_unique_id = 510
+    assert document._get_unique_id(bbox) == expected_unique_id
+
+
 def test_format_bbox():
     # Mock - List of bbox coordinates
     bbox = [10, 230, 40, 350]
@@ -128,20 +137,21 @@ def test_get_page_table_data():
     assert document._get_page_table_data(page_metadata_list, page_num) is None
 
 
-def test_delete_lowest_num_page_data():
+def test_delete_processed_data():
     # Define test data
-    lowest_page_num = 2
+    unique_id = 403.44000000000005
     page_metadata_list = [
-        {"page_num": 12, "page_name": "micron"},
-        {"page_num": 21, "page_name": "bird"},
-        {"page_num": 2, "page_name": "eucalps"},
+        {"bbox": {"x1": 253.45, "y1": 129.24, "x2": 10.9, "y2": 228.15}, "page_name": "micron"},
+        {"bbox": {"x1": 243.15, "y1": 159.04, "x2": 9.19, "y2": 298.35}, "page_name": "bird"},
+        {"bbox": {"x1": 53.25, "y1": 119.04, "x2": 12.9, "y2": 218.25}, "page_name": "eucalps"},
     ]
     expected_metadata = [
-        {"page_num": 12, "page_name": "micron"},
-        {"page_num": 21, "page_name": "bird"},
+        {"bbox": {"x1": 253.45, "y1": 129.24, "x2": 10.9, "y2": 228.15}, "page_name": "micron"},
+        {"bbox": {"x1": 243.15, "y1": 159.04, "x2": 9.19, "y2": 298.35}, "page_name": "bird"},
+        
     ]
     assert (
-        document._delete_lowest_num_page_data(page_metadata_list, lowest_page_num)
+        document._delete_processed_data(page_metadata_list, unique_id)
         == expected_metadata
     )
 
@@ -150,7 +160,7 @@ def test_is_close_to_footer():
     # Define test data
     page_height = 100  # Example page height
     upper_y_coord = 80  # Example upper Y coordinate
-    footer_height = 0.5 * page_height  # Calculate expected footer height
+    footer_height = 0.8 * page_height  # Calculate expected footer height
 
     # Call the function under test
     result = document._is_close_to_footer(page_height, upper_y_coord)
