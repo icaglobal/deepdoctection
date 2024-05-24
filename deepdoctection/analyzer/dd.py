@@ -265,6 +265,10 @@ def build_doctr_word(cfg: AttrDict) -> DoctrTextlineDetector:
     return DoctrTextlineDetector(profile.architecture, weights_path, profile.categories, cfg.DEVICE, lib=cfg.LIB)
 
 
+def build_streamer():
+    return True
+
+
 def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
     """
     Builds the analyzer with a given config
@@ -273,6 +277,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
     :return: Analyzer pipeline
     """
     pipe_component_list: List[PipelineComponent] = []
+
     if cfg.USE_LAYOUT:
         d_layout = build_detector(cfg, "LAYOUT")
         layout = build_service(d_layout, cfg, "LAYOUT")
@@ -394,16 +399,16 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         pipe_component_list.append(order)
                 
         # Text Refinement Service 
-        if cfg.USE_TEXT_REFINEMENT:
-            categories_to_refine = [LayoutType.text, LayoutType.title] 
-            text_refine = TextRefinementService(
-                use_spellcheck_refinement=cfg.TEXT_REFINEMENT.USE_SPELLCHECKER_REFINEMENT,
-                use_nlp_refinement=cfg.TEXT_REFINEMENT.USE_NLP_REFINEMENT,
-                text_refinement_threshold=cfg.TEXT_REFINEMENT.TEXT_REFINEMENT_THRESHOLD,
-                nlp_refinement_model_name=cfg.TEXT_REFINEMENT.NLP_REFINEMENT.MLM_MODEL, # TODO: Add support for custom models
-                categories_to_refine=categories_to_refine) 
+#        if cfg.USE_TEXT_REFINEMENT:
+#            categories_to_refine = [LayoutType.text, LayoutType.title]
+#            text_refine = TextRefinementService(
+#                use_spellcheck_refinement=cfg.TEXT_REFINEMENT.USE_SPELLCHECKER_REFINEMENT,
+#                use_nlp_refinement=cfg.TEXT_REFINEMENT.USE_NLP_REFINEMENT,
+#                text_refinement_threshold=cfg.TEXT_REFINEMENT.TEXT_REFINEMENT_THRESHOLD,
+#                nlp_refinement_model_name=cfg.TEXT_REFINEMENT.NLP_REFINEMENT.MLM_MODEL, # TODO: Add support for custom models
+#                categories_to_refine=categories_to_refine)
             
-            pipe_component_list.append(text_refine)
+#            pipe_component_list.append(text_refine)
 
     page_parsing_service = PageParsingService(
         text_container=LayoutType.word,

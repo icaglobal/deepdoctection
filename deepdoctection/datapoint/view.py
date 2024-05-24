@@ -917,7 +917,7 @@ class Document:
         self.decision_funcs = self.define_multipage_entity_decision_functions()
 
     
-    def define_multipage_entity_decision_functions(self, cfg)
+    #def define_multipage_entity_decision_functions(self, cfg)
     
     
     def get_multipage_entities(self) -> Dict[str, List[Dict[str, Any]]]:
