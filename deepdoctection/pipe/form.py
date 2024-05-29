@@ -14,21 +14,34 @@ class FormHandler:
         catalog = resolve1(doc.catalog)
 
         if 'AcroForm' not in catalog.keys():
-            self.resut = None
+            self.result = None
         else:
             acroform = resolve1(catalog['AcroForm'])
             if 'XFA' in acroform.keys():
                 xfa = resolve1(acroform["XFA"])
-                self.result = XFA(xfa).result
+                self.result = self.process_xfa_estars(xfa)
 
             elif 'Fields' in acroform.keys():
-                fields = pdf.get_fields()
-                self.result = fields
+                self.result = self.process_acroform(pdf)
 
+    def process_acroform(self, pdf):
+        fields = pdf.get_fields()
+        t_fields = {}
+        for key, val in fields.items():
+            t_fields[key] = {
+                "section": None,
+                "field_name": key,
+                "name": val['/T'],
+                "name_tag": None if '/V' not in val.keys() else val['/V'],
+            }
 
-class XFA:
-    def __init__(self, xfa):
-        self.result = self.process_xfa_estars(xfa)
+        result = {
+            "tot_columns": len(fields),
+            "column_names": list(fields.keys()),
+            't_fields': t_fields,
+            "cell_values": None,
+        }
+        return result
 
     def clean_name(self, s, n=50):
         """
@@ -47,7 +60,6 @@ class XFA:
         result = re.sub("[^a-z0-9]+", " ", result)
         result = re.sub("\s+", "_", result.strip())
         return result[:n]
-
 
     def get_fields_from_template(self, elem, namespaces, result={}, parent=None):
         """
@@ -117,7 +129,6 @@ class XFA:
                 result = self.get_fields_from_template(item, namespaces, result, parent)
         return result
 
-
     def get_fields_from_dataset(self, fields, datasets, namespaces):
         """
         :param fields:
@@ -148,7 +159,6 @@ class XFA:
                         else:
                             fields[field_name]["value"] = val
         return fields
-
 
     def process_xfa_estars(self, xfa):
         """
