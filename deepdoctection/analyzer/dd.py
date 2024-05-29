@@ -23,9 +23,6 @@ Module for **deep**doctection analyzer.
 -user factory with a reduced config setting
 """
 
-from ..pipe.testservice import TestService
-from ..pipe.acroform import AcroFormParsingService
-
 import ast
 import os
 from os import environ
@@ -281,7 +278,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
     if cfg.USE_LAYOUT:
         d_layout = build_detector(cfg, "LAYOUT")
         layout = build_service(d_layout, cfg, "LAYOUT")
-        pipe_component_list.append(layout)
+#        pipe_component_list.append(layout)
 
     # setup layout nms service
     if cfg.LAYOUT_NMS_PAIRS.COMBINATIONS and cfg.USE_LAYOUT:
@@ -294,18 +291,18 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         layout_nms_serivce = AnnotationNmsService(
             cfg.LAYOUT_NMS_PAIRS.COMBINATIONS, cfg.LAYOUT_NMS_PAIRS.THRESHOLDS, cfg.LAYOUT_NMS_PAIRS.PRIORITY
         )
-        pipe_component_list.append(layout_nms_serivce)
+#        pipe_component_list.append(layout_nms_serivce)
 
     # setup tables service
     if cfg.USE_TABLE_SEGMENTATION:
         d_item = build_detector(cfg, "ITEM")
         item = build_sub_image_service(d_item, cfg, "ITEM")
-        pipe_component_list.append(item)
+#        pipe_component_list.append(item)
 
         if d_item.__class__.__name__ not in ("HFDetrDerivedDetector",):
             d_cell = build_detector(cfg, "CELL")
             cell = build_sub_image_service(d_cell, cfg, "CELL")
-            pipe_component_list.append(cell)
+#            pipe_component_list.append(cell)
 
         if d_item.__class__.__name__ in ("HFDetrDerivedDetector",):
             pubtables = PubtablesSegmentationService(
@@ -334,7 +331,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
                 [CellType.row_number, CellType.column_number],
                 stretch_rule=cfg.SEGMENTATION.STRETCH_RULE,
             )
-            pipe_component_list.append(pubtables)
+#            pipe_component_list.append(pubtables)
         else:
             table_segmentation = TableSegmentationService(
                 cfg.SEGMENTATION.ASSIGNMENT_RULE,
@@ -349,16 +346,16 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
                 [CellType.row_number, CellType.column_number],
                 cfg.SEGMENTATION.STRETCH_RULE,
             )
-            pipe_component_list.append(table_segmentation)
+#            pipe_component_list.append(table_segmentation)
 
             if cfg.USE_TABLE_REFINEMENT:
                 table_segmentation_refinement = TableSegmentationRefinementService()
-                pipe_component_list.append(table_segmentation_refinement)
+#                pipe_component_list.append(table_segmentation_refinement)
 
     if cfg.USE_PDF_MINER:
         pdf_text = PdfPlumberTextDetector()
         d_text = TextExtractionService(pdf_text)
-        pipe_component_list.append(d_text)
+#        pipe_component_list.append(d_text)
 
     # setup ocr
     if cfg.USE_OCR:
@@ -366,7 +363,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         if cfg.OCR.USE_DOCTR:
             d_word = build_doctr_word(cfg)
             word = ImageLayoutService(d_word, to_image=True, crop_image=True, skip_if_layout_extracted=True)
-            pipe_component_list.append(word)
+#            pipe_component_list.append(word)
 
         ocr = build_ocr(cfg)
         skip_if_text_extracted = cfg.USE_PDF_MINER
@@ -374,7 +371,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
         text = TextExtractionService(
             ocr, skip_if_text_extracted=skip_if_text_extracted, extract_from_roi=extract_from_roi
         )
-        pipe_component_list.append(text)
+#        pipe_component_list.append(text)
 
     if cfg.USE_PDF_MINER or cfg.USE_OCR:
         match = MatchingService(
@@ -384,7 +381,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
             threshold=cfg.WORD_MATCHING.THRESHOLD,
             max_parent_only=cfg.WORD_MATCHING.MAX_PARENT_ONLY,
         )
-        pipe_component_list.append(match)
+#        pipe_component_list.append(match)
 
         order = TextOrderService(
             text_container=LayoutType.word,
@@ -396,7 +393,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
             height_tolerance=cfg.TEXT_ORDERING.HEIGHT_TOLERANCE,
             paragraph_break=cfg.TEXT_ORDERING.PARAGRAPH_BREAK,
         )
-        pipe_component_list.append(order)
+#        pipe_component_list.append(order)
                 
         # Text Refinement Service 
 #        if cfg.USE_TEXT_REFINEMENT:

@@ -157,7 +157,7 @@ class DoctectionPipe(Pipeline):
         else:
             raise BrokenPipeError("Cannot build Dataflow")
 
-        self.pdf_stream = df.df._itr.file_reader
+        self.pdf_reader = df.df._itr.file_reader
         df = MapData(df, _proto_process(path, doc_path))
         if dataset_dataflow is None:
             df = MapData(df, _to_image(dpi=300))  # pylint: disable=E1120
