@@ -19,9 +19,10 @@
 Subclasses for ImageAnnotation and Image objects with various properties. These classes
 simplify consumption
 """
+from __future__ import annotations
 
 from copy import copy
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union, no_type_check, Callable
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union, no_type_check
 
 import numpy as np
 
@@ -43,7 +44,6 @@ from ..utils.viz import draw_boxes, interactive_imshow, viz_handler
 from .annotation import ContainerAnnotation, ImageAnnotation, SummaryAnnotation, ann_from_dict
 from .box import BoundingBox, crop_box_from_image
 from .image import Image
-import json
 
 
 class ImageAnnotationBaseView(ImageAnnotation):
@@ -65,7 +65,7 @@ class ImageAnnotationBaseView(ImageAnnotation):
     base_page: `Page` class instantiated by the lowest hierarchy `Image`
     """
 
-    base_page: "Page"
+    base_page: Page
 
     @property
     def bbox(self) -> List[float]:
@@ -149,7 +149,7 @@ class ImageAnnotationBaseView(ImageAnnotation):
         return attribute_names
 
     @classmethod
-    def from_dict(cls, **kwargs: JsonDict) -> "ImageAnnotationBaseView":
+    def from_dict(cls, **kwargs: JsonDict) -> ImageAnnotationBaseView:
         """
         Identical to its base class method for having correct return types. If the base class changes, please
         change this method as well.
@@ -206,15 +206,38 @@ class Layout(ImageAnnotationBaseView):
         return words_with_reading_order
 
     @property
-    def text_(self) -> Dict[str, Union[str, List[str]]]:
+    def text_(self) -> JsonDict:
         """Returns a dict `{"text": text string,
         "text_list": list of single words,
         "annotation_ids": word annotation ids`"""
         words = self.get_ordered_words()
+        characters, ann_ids, token_classes, token_tags, token_classes_ids, token_tag_ids = zip(
+            *[
+                (
+                    word.characters,
+                    word.annotation_id,
+                    word.token_class,
+                    word.token_tag,
+                    (
+                        word.get_sub_category(WordType.token_class).category_id
+                        if WordType.token_class in word.sub_categories
+                        else None
+                    ),
+                    (word.get_sub_category(WordType.token_tag).category_id)
+                    if WordType.token_tag in word.sub_categories
+                    else None,
+                )
+                for word in words
+            ]
+        )
         return {
-            "text": " ".join([word.characters for word in words]),  # type: ignore
-            "text_list": [word.characters for word in words],  # type: ignore
-            "annotation_ids": [word.annotation_id for word in words],
+            "text": " ".join(characters),
+            "words": characters,
+            "ann_ids": ann_ids,
+            "token_classes": token_classes,
+            "token_tags": token_tags,
+            "token_class_ids": token_classes_ids,
+            "token_tag_ids": token_tag_ids,
         }
 
     def get_attribute_names(self) -> Set[str]:
@@ -332,19 +355,33 @@ class Table(Layout):
             return super().text
 
     @property
-    def text_(self) -> Dict[str, Union[str, List[str]]]:
+    def text_(self) -> JsonDict:
         cells = self.cells
         if not cells:
             return super().text_
-        text_list: List[str] = []
-        annotation_id_list: List[str] = []
+        text: List[str] = []
+        words: List[str] = []
+        ann_ids: List[str] = []
+        token_classes: List[str] = []
+        token_tags: List[str] = []
+        token_class_ids: List[str] = []
+        token_tag_ids: List[str] = []
         for cell in cells:
-            text_list.extend(cell.text_["text_list"])  # type: ignore
-            annotation_id_list.extend(cell.text_["annotation_ids"])  # type: ignore
+            text.extend(cell.text_["text"])  # type: ignore
+            words.extend(cell.text_["words"])  # type: ignore
+            ann_ids.extend(cell.text_["ann_ids"])  # type: ignore
+            token_classes.extend(cell.text_["token_classes"])  # type: ignore
+            token_tags.extend(cell.text_["token_tags"])  # type: ignore
+            token_class_ids.extend(cell.text_["token_class_ids"])  # type: ignore
+            token_tag_ids.extend(cell.text_["token_tag_ids"])  # type: ignore
         return {
-            "text": " ".join([cell.text for cell in cells]),  # type: ignore
-            "text_list": text_list,
-            "annotation_ids": annotation_id_list,
+            "text": " ".join(text),
+            "words": words,
+            "ann_ids": ann_ids,
+            "token_classes": token_classes,
+            "token_tags": token_tags,
+            "token_class_ids": token_class_ids,
+            "token_tag_ids": token_tag_ids,
         }
 
     @property
@@ -453,37 +490,69 @@ class Page(Image):
         "document_id",
         "page_number",
     }
+    include_residual_text_container: bool = True
 
-    @no_type_check
-    def get_annotation(
+    def get_annotation(  # type: ignore
         self,
         category_names: Optional[Union[str, ObjectTypes, Sequence[Union[str, ObjectTypes]]]] = None,
         annotation_ids: Optional[Union[str, Sequence[str]]] = None,
-        annotation_types: Optional[Union[str, Sequence[str]]] = None,
+        service_id: Optional[Union[str, Sequence[str]]] = None,
+        model_id: Optional[Union[str, Sequence[str]]] = None,
+        session_ids: Optional[Union[str, Sequence[str]]] = None,
+        ignore_inactive: bool = True,
     ) -> List[ImageAnnotationBaseView]:
         """
+        Selection of annotations from the annotation container. Filter conditions can be defined by specifying
+        the annotation_id or the category name. (Since only image annotations are currently allowed in the container,
+        annotation_type is a redundant filter condition.) Only annotations that have  active = 'True' are
+        returned. If more than one condition is provided, only annotations will be returned that satisfy all conditions.
+        If no condition is provided, it will return all active annotations.
+
         Identical to its base class method for having correct return types. If the base class changes, please
         change this method as well.
+
+        :param category_names: A single name or list of names
+        :param annotation_ids: A single id or list of ids
+        :param service_id: A single service name or list of service names
+        :param model_id: A single model name or list of model names
+        :param session_ids: A single session id or list of session ids
+        :param ignore_inactive: If set to `True` only active annotations are returned.
+
+        :return: A (possibly empty) list of Annotations
         """
-        cat_names = [category_names] if isinstance(category_names, (ObjectTypes, str)) else category_names
-        if cat_names is not None:
-            cat_names = [get_type(cat_name) for cat_name in cat_names]
+
+        if category_names is not None:
+            category_names = (
+                [get_type(cat_name) for cat_name in category_names]
+                if isinstance(category_names, list)
+                else [get_type(category_names)]  # type:ignore
+            )
         ann_ids = [annotation_ids] if isinstance(annotation_ids, str) else annotation_ids
-        ann_types = [annotation_types] if isinstance(annotation_types, str) else annotation_types
+        service_id = [service_id] if isinstance(service_id, str) else service_id
+        model_id = [model_id] if isinstance(model_id, str) else model_id
+        session_id = [session_ids] if isinstance(session_ids, str) else session_ids
 
-        anns = filter(lambda x: x.active, self.annotations)
+        if ignore_inactive:
+            anns = filter(lambda x: x.active, self.annotations)
+        else:
+            anns = self.annotations  # type:ignore
 
-        if ann_types is not None:
-            for type_name in ann_types:
-                anns = filter(lambda x: isinstance(x, eval(type_name)), anns)  # pylint: disable=W0123, W0640
-
-        if cat_names is not None:
-            anns = filter(lambda x: x.category_name in cat_names, anns)
+        if category_names is not None:
+            anns = filter(lambda x: x.category_name in category_names, anns)  # type:ignore
 
         if ann_ids is not None:
-            anns = filter(lambda x: x.annotation_id in ann_ids, anns)
+            anns = filter(lambda x: x.annotation_id in ann_ids, anns)  # type:ignore
 
-        return list(anns)
+        if service_id is not None:
+            anns = filter(lambda x: x.generating_service in service_id, anns)  # type:ignore
+
+        if model_id is not None:
+            anns = filter(lambda x: x.generating_model in model_id, anns)  # type:ignore
+
+        if session_id is not None:
+            anns = filter(lambda x: x.session_id in session_id, anns)  # type:ignore
+
+        return list(anns)  # type:ignore
 
     def __getattr__(self, item: str) -> Any:
         if item not in self.get_attribute_names():
@@ -526,8 +595,8 @@ class Page(Image):
         text_container: Optional[ObjectTypes] = None,
         floating_text_block_categories: Optional[Sequence[ObjectTypes]] = None,
         include_residual_text_container: bool = True,
-        base_page: Optional["Page"] = None,
-    ) -> "Page":
+        base_page: Optional[Page] = None,
+    ) -> Page:
         """
         Factory function for generating a `Page` instance from `image_orig` .
 
@@ -585,6 +654,7 @@ class Page(Image):
             page.summary = SummaryAnnotation.from_dict(**summary_dict)
         page.floating_text_block_categories = floating_text_block_categories  # type: ignore
         page.text_container = text_container  # type: ignore
+        page.include_residual_text_container = include_residual_text_container
         return page
 
     def _order(self, block: str) -> List[ImageAnnotationBaseView]:
@@ -598,7 +668,7 @@ class Page(Image):
         break_str = "\n" if line_break else " "
         for block in block_with_order:
             text += f"{block.text}{break_str}"
-        return text
+        return text[:-1]
 
     @property
     def text(self) -> str:
@@ -608,17 +678,35 @@ class Page(Image):
         return self._make_text()
 
     @property
-    def text_(self) -> Dict[str, Union[str, List[str]]]:
+    def text_(self) -> JsonDict:
         """Returns a dict `{"text": text string,
         "text_list": list of single words,
         "annotation_ids": word annotation ids`"""
         block_with_order = self._order("layouts")
-        text_list: List[str] = []
-        annotation_id_list: List[str] = []
+        text: List[str] = []
+        words: List[str] = []
+        ann_ids: List[str] = []
+        token_classes: List[str] = []
+        token_tags: List[str] = []
+        token_class_ids: List[str] = []
+        token_tag_ids: List[str] = []
         for block in block_with_order:
-            text_list.extend(block.text_["text_list"])  # type: ignore
-            annotation_id_list.extend(block.text_["annotation_ids"])  # type: ignore
-        return {"text": self.text, "text_list": text_list, "annotation_ids": annotation_id_list}
+            text.append(block.text_["text"])  # type: ignore
+            words.extend(block.text_["words"])  # type: ignore
+            ann_ids.extend(block.text_["ann_ids"])  # type: ignore
+            token_classes.extend(block.text_["token_classes"])  # type: ignore
+            token_tags.extend(block.text_["token_tags"])  # type: ignore
+            token_class_ids.extend(block.text_["token_class_ids"])  # type: ignore
+            token_tag_ids.extend(block.text_["token_tag_ids"])  # type: ignore
+        return {
+            "text": " ".join(text),
+            "words": words,
+            "ann_ids": ann_ids,
+            "token_classes": token_classes,
+            "token_tags": token_tags,
+            "token_class_ids": token_class_ids,
+            "token_tag_ids": token_tag_ids,
+        }
 
     def get_layout_context(self, annotation_id: str, context_size: int = 3) -> List[ImageAnnotationBaseView]:
         """For a given `annotation_id` get a list of `ImageAnnotation` that are nearby in terms of reading order.
@@ -728,6 +816,11 @@ class Page(Image):
         category_names_list: List[Union[str, None]] = []
         box_stack = []
         cells_found = False
+
+        if self.image is None and interactive:
+            logger.warning(
+                LoggingRecord("No image provided. Cannot display image in interactive mode", {"page_id": self.image_id})
+            )
 
         if debug_kwargs:
             anns = self.get_annotation(category_names=list(debug_kwargs.keys()))
@@ -876,7 +969,7 @@ class Page(Image):
         text_container: Optional[ObjectTypes] = None,
         floating_text_block_categories: Optional[List[ObjectTypes]] = None,
         include_residual_text_container: bool = True,
-    ) -> "Page":
+    ) -> Page:
         """Reading JSON file and building a `Page` object with given config.
         :param file_path: Path to file
         :param text_container: A LayoutType to get the text from. It will steer the output of `Layout.words`.
@@ -899,6 +992,14 @@ class Page(Image):
             for word in all_words
             if word.token_tag not in (TokenClasses.other, None)
         ]
+
+    def __copy__(self) -> Page:
+        return self.__class__.from_image(
+            self.image_orig,
+            self.text_container,
+            self.floating_text_block_categories,
+            self.include_residual_text_container,
+        )
 
 
 class Document:

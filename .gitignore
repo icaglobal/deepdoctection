@@ -1,4 +1,5 @@
 venv
+.env
 .idea
 *.egg-info
 .coverage
@@ -19,3 +20,4 @@ snippets.py
 /build/
 /wandb/
 .env
+test_files/

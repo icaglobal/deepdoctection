@@ -21,13 +21,15 @@ PDFPlumber text extraction engine
 
 from typing import Dict, List, Tuple
 
+from lazy_imports import try_import
+
 from ..utils.context import save_tmp_file
 from ..utils.detection_types import Requirement
-from ..utils.file_utils import get_pdfplumber_requirement, pdfplumber_available
+from ..utils.file_utils import get_pdfplumber_requirement
 from ..utils.settings import LayoutType, ObjectTypes
 from .base import DetectionResult, PdfMiner
 
-if pdfplumber_available():
+with try_import() as import_guard:
     from pdfplumber.pdf import PDF
 
 
@@ -64,9 +66,12 @@ class PdfPlumberTextDetector(PdfMiner):
 
     """
 
-    def __init__(self) -> None:
-        self.name = "pdfplumber"
+    def __init__(self, x_tolerance: int = 3, y_tolerance: int = 3) -> None:
+        self.name = "Pdfplumber"
+        self.model_id = self.get_model_id()
         self.categories = {"1": LayoutType.word}
+        self.x_tolerance = x_tolerance
+        self.y_tolerance = y_tolerance
 
     def predict(self, pdf_bytes: bytes) -> List[DetectionResult]:
         """
@@ -81,7 +86,7 @@ class PdfPlumberTextDetector(PdfMiner):
                 _pdf = PDF(fin)
                 self._page = _pdf.pages[0]
                 self._pdf_bytes = pdf_bytes
-                words = self._page.extract_words()
+                words = self._page.extract_words(x_tolerance=self.x_tolerance, y_tolerance=self.y_tolerance)
         detect_results = list(map(_to_detect_result, words))
         return detect_results
 

@@ -22,54 +22,44 @@ Module for **deep**doctection analyzer.
 
 -user factory with a reduced config setting
 """
-import ast
+
 import os
 from os import environ
 from shutil import copyfile
 from typing import List, Optional, Union
 
-from ..datapoint.image import Image
-from ..datapoint.annotation import ImageAnnotation
+from lazy_imports import try_import
 
 from ..extern.base import ObjectDetector
+from ..extern.d2detect import D2FrcnnDetector, D2FrcnnTracingDetector
 from ..extern.doctrocr import DoctrTextlineDetector, DoctrTextRecognizer
+from ..extern.hfdetr import HFDetrDerivedDetector
 from ..extern.model import ModelCatalog, ModelDownloadManager
 from ..extern.pdftext import PdfPlumberTextDetector
+from ..extern.pt.ptutils import get_torch_device
 from ..extern.tessocr import TesseractOcrDetector
 from ..extern.texocr import TextractOcrDetector
+from ..extern.tp.tfutils import disable_tp_layer_logging, get_tf_device
+from ..extern.tpdetect import TPFrcnnDetector
 from ..pipe.base import PipelineComponent
-from ..pipe.cell import DetectResultGenerator, SubImageLayoutService
 from ..pipe.common import AnnotationNmsService, MatchingService, PageParsingService
 from ..pipe.doctectionpipe import DoctectionPipe
 from ..pipe.layout import ImageLayoutService
 from ..pipe.order import TextOrderService
 from ..pipe.refine import TableSegmentationRefinementService
 from ..pipe.segment import PubtablesSegmentationService, TableSegmentationService
+from ..pipe.sub_layout import DetectResultGenerator, SubImageLayoutService
 from ..pipe.text import TextExtractionService
 from ..utils.detection_types import Pathlike
-from ..utils.env_info import get_device
-from ..utils.file_utils import (
-    boto3_available,
-    detectron2_available,
-    pytorch_available,
-    tensorpack_available,
-    tf_available,
-)
+from ..utils.error import DependencyError
+from ..utils.file_utils import detectron2_available, tensorpack_available
 from ..utils.fs import get_configs_dir_path, get_package_path, mkdir_p
 from ..utils.logger import LoggingRecord, logger
 from ..utils.metacfg import AttrDict, set_config_by_yaml
 from ..utils.settings import CellType, LayoutType
 from ..utils.transform import PadTransform
 
-if tf_available() and tensorpack_available():
-    from ..extern.tp.tfutils import disable_tp_layer_logging
-    from ..extern.tpdetect import TPFrcnnDetector
-
-if pytorch_available():
-    from ..extern.d2detect import D2FrcnnDetector, D2FrcnnTracingDetector
-    from ..extern.hfdetr import HFDetrDerivedDetector
-
-if boto3_available():
+with try_import() as image_guard:
     from botocore.config import Config  # type: ignore
 
 
@@ -346,11 +336,20 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
             pipe_component_list.append(table_segmentation)
 
             if cfg.USE_TABLE_REFINEMENT:
-                table_segmentation_refinement = TableSegmentationRefinementService()
+                table_segmentation_refinement = TableSegmentationRefinementService(
+                    [LayoutType.table, LayoutType.table_rotated],
+                    [
+                        LayoutType.cell,
+                        CellType.column_header,
+                        CellType.projected_row_header,
+                        CellType.spanning,
+                        CellType.row_header,
+                    ],
+                )
                 pipe_component_list.append(table_segmentation_refinement)
 
     if cfg.USE_PDF_MINER:
-        pdf_text = PdfPlumberTextDetector()
+        pdf_text = PdfPlumberTextDetector(x_tolerance=cfg.PDF_MINER.X_TOLERANCE, y_tolerance=cfg.PDF_MINER.Y_TOLERANCE)
         d_text = TextExtractionService(pdf_text)
         pipe_component_list.append(d_text)
 
@@ -403,7 +402,7 @@ def build_analyzer(cfg: AttrDict) -> DoctectionPipe:
 
 
 def get_dd_analyzer(
-    reset_config_file: bool = False,
+    reset_config_file: bool = True,
     config_overwrite: Optional[List[str]] = None,
     path_config_file: Optional[Pathlike] = None,
 ) -> DoctectionPipe:
@@ -432,8 +431,13 @@ def get_dd_analyzer(
     :return: A DoctectionPipe instance with given configs
     """
     config_overwrite = [] if config_overwrite is None else config_overwrite
-    lib = "TF" if ast.literal_eval(os.environ.get("USE_TENSORFLOW", "False")) else "PT"
-    device = get_device(False)
+    lib = "TF" if os.environ.get("DD_USE_TF") else "PT"
+    if lib == "TF":
+        device = get_tf_device()
+    elif lib == "PT":
+        device = get_torch_device()
+    else:
+        raise DependencyError("At least one of the env variables DD_USE_TF or DD_USE_TORCH must be set.")
     dd_one_config_path = maybe_copy_config_to_cache(
         get_package_path(), get_configs_dir_path(), _DD_ONE, reset_config_file
     )

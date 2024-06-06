@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# File: tokenclass.py
+# File: lm.py
 
 # Copyright 2021 Dr. Janis Meyer. All rights reserved.
 #
@@ -18,56 +18,18 @@
 """
 Module for token classification pipeline
 """
+from __future__ import annotations
 
 from copy import copy
-from typing import Any, List, Literal, Optional, Sequence, Union
+from typing import Any, Callable, List, Literal, Optional, Sequence, Union
 
 from ..datapoint.image import Image
 from ..extern.hflayoutlm import HFLayoutLmSequenceClassifierBase, HFLayoutLmTokenClassifierBase
-from ..mapper.laylmstruct import image_to_layoutlm_features
+from ..mapper.laylmstruct import image_to_layoutlm_features, image_to_lm_features
 from ..utils.detection_types import JsonDict
-from ..utils.file_utils import transformers_available
 from ..utils.settings import BioTag, LayoutType, ObjectTypes, PageType, TokenClasses, WordType
 from .base import LanguageModelPipelineComponent
 from .registry import pipeline_component_registry
-
-if transformers_available():
-    from transformers import LayoutLMTokenizerFast, RobertaTokenizerFast, XLMRobertaTokenizerFast
-
-    _ARCHITECTURES_TO_TOKENIZER = {
-        ("LayoutLMForTokenClassification", False): LayoutLMTokenizerFast.from_pretrained(
-            "microsoft/layoutlm-base-uncased"
-        ),
-        ("LayoutLMForSequenceClassification", False): LayoutLMTokenizerFast.from_pretrained(
-            "microsoft/layoutlm-base-uncased"
-        ),
-        ("LayoutLMv2ForTokenClassification", False): LayoutLMTokenizerFast.from_pretrained(
-            "microsoft/layoutlm-base-uncased"
-        ),
-        ("LayoutLMv2ForSequenceClassification", False): LayoutLMTokenizerFast.from_pretrained(
-            "microsoft/layoutlm-base-uncased"
-        ),
-        ("LayoutLMv2ForTokenClassification", True): XLMRobertaTokenizerFast.from_pretrained("xlm-roberta-base"),
-        ("LayoutLMv2ForSequenceClassification", True): XLMRobertaTokenizerFast.from_pretrained("xlm-roberta-base"),
-        ("LayoutLMv3ForSequenceClassification", False): RobertaTokenizerFast.from_pretrained(
-            "roberta-base", add_prefix_space=True
-        ),
-        ("LayoutLMv3ForTokenClassification", False): RobertaTokenizerFast.from_pretrained(
-            "roberta-base", add_prefix_space=True
-        ),
-    }
-
-
-def get_tokenizer_from_architecture(architecture_name: str, use_xlm_tokenizer: bool) -> Any:
-    """
-    We do not use the tokenizer for a particular model that the transformer library provides. Thie mapping therefore
-    returns the tokenizer that should be used for a particular model.
-
-    :param architecture_name: The model as stated in the transformer library.
-    :param use_xlm_tokenizer: True if one uses the LayoutXLM. (The model cannot be distinguished from LayoutLMv2).
-    :return: Tokenizer instance to use.
-    """
-    return _ARCHITECTURES_TO_TOKENIZER[(architecture_name, use_xlm_tokenizer)]
 
 
 @pipeline_component_registry.register("LMTokenClassifierService")
@@ -154,7 +116,8 @@ class LMTokenClassifierService(LanguageModelPipelineComponent):
             else:
                 self.default_key = TokenClasses.other
             self.other_name_as_key = {self.default_key: categories_name_as_key[self.default_key]}
-        super().__init__(self._get_name(), tokenizer, image_to_layoutlm_features)
+        image_to_features_func = self.image_to_features_func(self.language_model.image_to_features_mapping())
+        super().__init__(self._get_name(), tokenizer, image_to_features_func)
         self.required_kwargs = {
             "tokenizer": self.tokenizer,
             "padding": self.padding,
@@ -218,7 +181,9 @@ class LMTokenClassifierService(LanguageModelPipelineComponent):
                         word.annotation_id,
                     )
 
-    def clone(self) -> "LMTokenClassifierService":
+    def clone(self) -> LMTokenClassifierService:
+        # ToDo: replace copying of tokenizer with a proper clone method. Otherwise we cannot run the evaluation with
+        # multiple threads
         return self.__class__(
             copy(self.tokenizer),
             self.language_model.clone(),
@@ -244,18 +209,19 @@ class LMTokenClassifierService(LanguageModelPipelineComponent):
         return f"lm_token_class_{self.language_model.name}"
 
     def _init_sanity_checks(self) -> None:
-        tokenizer_class = self.language_model.model.config.tokenizer_class
-        use_xlm_tokenizer = False
-        if tokenizer_class is not None:
-            use_xlm_tokenizer = True
-        tokenizer_reference = get_tokenizer_from_architecture(
-            self.language_model.model.__class__.__name__, use_xlm_tokenizer
-        )
-        if not isinstance(self.tokenizer, type(tokenizer_reference)):
+        tokenizer_class_name = self.language_model.model.config.tokenizer_class
+        if tokenizer_class_name != self.tokenizer.__class__.__name__:
             raise TypeError(
-                f"You want to use {type(self.tokenizer)} but you should use {type(tokenizer_reference)} "
+                f"You want to use {type(self.tokenizer)} but you should use {tokenizer_class_name} "
                 f"in this framework"
             )
+
+    @staticmethod
+    def image_to_features_func(mapping_str: str) -> Callable[..., Callable[[Image], Optional[Any]]]:
+        """Replacing eval functions"""
+        return {"image_to_layoutlm_features": image_to_layoutlm_features, "image_to_lm_features": image_to_lm_features}[
+            mapping_str
+        ]
 
 
 @pipeline_component_registry.register("LMSequenceClassifierService")
@@ -315,7 +281,8 @@ class LMSequenceClassifierService(LanguageModelPipelineComponent):
         self.padding = padding
         self.truncation = truncation
         self.return_overflowing_tokens = return_overflowing_tokens
-        super().__init__(self._get_name(), tokenizer, image_to_layoutlm_features)
+        image_to_features_func = self.image_to_features_func(self.language_model.image_to_features_mapping())
+        super().__init__(self._get_name(), tokenizer, image_to_features_func)
         self.required_kwargs = {
             "tokenizer": self.tokenizer,
             "padding": self.padding,
@@ -335,7 +302,7 @@ class LMSequenceClassifierService(LanguageModelPipelineComponent):
             PageType.document_type, lm_output.class_name, lm_output.class_id, None, lm_output.score
         )
 
-    def clone(self) -> "LMSequenceClassifierService":
+    def clone(self) -> LMSequenceClassifierService:
         return self.__class__(
             copy(self.tokenizer),
             self.language_model.clone(),
@@ -358,15 +325,16 @@ class LMSequenceClassifierService(LanguageModelPipelineComponent):
         return f"lm_sequence_class_{self.language_model.name}"
 
     def _init_sanity_checks(self) -> None:
-        tokenizer_class = self.language_model.model.config.tokenizer_class
-        use_xlm_tokenizer = False
-        if tokenizer_class is not None:
-            use_xlm_tokenizer = True
-        tokenizer_reference = get_tokenizer_from_architecture(
-            self.language_model.model.__class__.__name__, use_xlm_tokenizer
-        )
-        if not isinstance(self.tokenizer, type(tokenizer_reference)):
+        tokenizer_class_name = self.language_model.model.config.tokenizer_class
+        if tokenizer_class_name != self.tokenizer.__class__.__name__:
             raise TypeError(
-                f"You want to use {type(self.tokenizer)} but you should use {type(tokenizer_reference)} "
+                f"You want to use {type(self.tokenizer)} but you should use {tokenizer_class_name} "
                 f"in this framework"
             )
+
+    @staticmethod
+    def image_to_features_func(mapping_str: str) -> Callable[..., Callable[[Image], Optional[Any]]]:
+        """Replacing eval functions"""
+        return {"image_to_layoutlm_features": image_to_layoutlm_features, "image_to_lm_features": image_to_lm_features}[
+            mapping_str
+        ]

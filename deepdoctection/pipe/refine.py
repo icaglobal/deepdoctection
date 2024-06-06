@@ -23,7 +23,7 @@ from collections import defaultdict
 from copy import copy
 from dataclasses import asdict
 from itertools import chain, product
-from typing import DefaultDict, List, Optional, Set, Tuple, Union
+from typing import DefaultDict, List, Optional, Sequence, Set, Tuple, Union
 
 import networkx as nx  # type: ignore
 
@@ -33,8 +33,8 @@ from ..datapoint.image import Image
 from ..extern.base import DetectionResult
 from ..mapper.maputils import MappingContextManager
 from ..utils.detection_types import JsonDict
-from ..utils.error import ImageError
-from ..utils.settings import CellType, LayoutType, Relationships, TableType, get_type
+from ..utils.error import AnnotationError, ImageError
+from ..utils.settings import CellType, LayoutType, ObjectTypes, Relationships, TableType, get_type
 from .base import PipelineComponent
 from .registry import pipeline_component_registry
 
@@ -398,19 +398,13 @@ class TableSegmentationRefinementService(PipelineComponent):
 
     """
 
-    def __init__(self) -> None:
-        self._table_name = [LayoutType.table, LayoutType.table_rotated]
-        self._cell_names = [
-            LayoutType.cell,
-            CellType.column_header,
-            CellType.projected_row_header,
-            CellType.spanning,
-            CellType.row_header,
-        ]
+    def __init__(self, table_name: Sequence[ObjectTypes], cell_names: Sequence[ObjectTypes]) -> None:
+        self.table_name = table_name
+        self.cell_names = cell_names
         super().__init__("table_segment_refine")
 
     def serve(self, dp: Image) -> None:
-        tables = dp.get_annotation(category_names=self._table_name)
+        tables = dp.get_annotation(category_names=self.table_name)
         for table in tables:
             if table.image is None:
                 raise ImageError("table.image cannot be None")
@@ -458,21 +452,28 @@ class TableSegmentationRefinementService(PipelineComponent):
                         for cell in cells:
                             cell.deactivate()
 
-            cells = table.image.get_annotation(category_names=self._cell_names)
+            cells = table.image.get_annotation(category_names=self.cell_names)
             number_of_rows = max(int(cell.get_sub_category(CellType.row_number).category_id) for cell in cells)
             number_of_cols = max(int(cell.get_sub_category(CellType.column_number).category_id) for cell in cells)
             max_row_span = max(int(cell.get_sub_category(CellType.row_span).category_id) for cell in cells)
             max_col_span = max(int(cell.get_sub_category(CellType.column_span).category_id) for cell in cells)
             # TODO: the summaries should be sub categories of the underlying ann
             if table.image.summary is not None:
-                if TableType.number_of_rows in table.image.summary.sub_categories:
-                    table.get_summary(TableType.number_of_rows)
-                if TableType.number_of_columns in table.image.summary.sub_categories:
-                    table.get_summary(TableType.number_of_columns)
-                if TableType.max_row_span in table.image.summary.sub_categories:
-                    table.get_summary(TableType.max_row_span)
-                if TableType.max_col_span in table.image.summary.sub_categories:
-                    table.get_summary(TableType.max_col_span)
+                if (
+                    TableType.number_of_rows in table.image.summary.sub_categories
+                    and TableType.number_of_columns in table.image.summary.sub_categories
+                    and TableType.max_row_span in table.image.summary.sub_categories
+                    and TableType.max_col_span in table.image.summary.sub_categories
+                ):
+                    table.image.summary.remove_sub_category(TableType.number_of_rows)
+                    table.image.summary.remove_sub_category(TableType.number_of_columns)
+                    table.image.summary.remove_sub_category(TableType.max_row_span)
+                    table.image.summary.remove_sub_category(TableType.max_col_span)
+                else:
+                    raise AnnotationError(
+                        "Table summary does not contain sub categories TableType.number_of_rows, "
+                        "TableType.number_of_columns, TableType.max_row_span, TableType.max_col_span"
+                    )
 
             self.dp_manager.set_summary_annotation(
                 TableType.number_of_rows, TableType.number_of_rows, number_of_rows, annotation_id=table.annotation_id
@@ -493,7 +494,7 @@ class TableSegmentationRefinementService(PipelineComponent):
             self.dp_manager.set_container_annotation(TableType.html, -1, TableType.html, table.annotation_id, html)
 
     def clone(self) -> PipelineComponent:
-        return self.__class__()
+        return self.__class__(self.table_name, self.cell_names)
 
     def get_meta_annotation(self) -> JsonDict:
         return dict(

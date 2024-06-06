@@ -19,36 +19,35 @@
 """
 Module for `Evaluator`
 """
-
-__all__ = ["Evaluator"]
+from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Dict, List, Literal, Mapping, Optional, Type, Union, overload
+from typing import Any, Dict, Generator, List, Literal, Mapping, Optional, Type, Union, overload
 
 import numpy as np
+from lazy_imports import try_import
 
 from ..dataflow import CacheData, DataFlow, DataFromList, MapData
 from ..datapoint.image import Image
 from ..datasets.base import DatasetBase
 from ..mapper.cats import filter_cat, remove_cats
+from ..mapper.d2struct import to_wandb_image
 from ..mapper.misc import maybe_load_image, maybe_remove_image, maybe_remove_image_from_category
 from ..pipe.base import LanguageModelPipelineComponent, PredictorPipelineComponent
 from ..pipe.common import PageParsingService
 from ..pipe.concurrency import MultiThreadPipelineComponent
 from ..pipe.doctectionpipe import DoctectionPipe
 from ..utils.detection_types import ImageType
-from ..utils.file_utils import detectron2_available, wandb_available
 from ..utils.logger import LoggingRecord, logger
 from ..utils.settings import DatasetType, LayoutType, TypeOrStr, get_type
 from ..utils.viz import interactive_imshow
 from .base import MetricBase
 
-if wandb_available():
+with try_import() as wb_import_guard:
     import wandb  # pylint:disable=W0611
     from wandb import Artifact, Table
 
-if wandb_available() and detectron2_available():
-    from ..mapper.d2struct import to_wandb_image
+__all__ = ["Evaluator"]
 
 
 class Evaluator:
@@ -94,7 +93,7 @@ class Evaluator:
         component_or_pipeline: Union[PredictorPipelineComponent, LanguageModelPipelineComponent, DoctectionPipe],
         metric: Union[Type[MetricBase], MetricBase],
         num_threads: int = 2,
-        run: Optional["wandb.sdk.wandb_run.Run"] = None,
+        run: Optional[wandb.sdk.wandb_run.Run] = None,
     ) -> None:
         """
         Evaluating a pipeline component on a dataset with a given metric.
@@ -275,7 +274,7 @@ class Evaluator:
 
         return df_pr
 
-    def compare(self, interactive: bool = False, **kwargs: Union[str, int]) -> Optional[ImageType]:
+    def compare(self, interactive: bool = False, **kwargs: Union[str, int]) -> Generator[ImageType, None, None]:
         """
         Visualize ground truth and prediction datapoint. Given a dataflow config it will run predictions per sample
         and concat the prediction image (with predicted bounding boxes) with ground truth image.
@@ -292,6 +291,8 @@ class Evaluator:
         show_layouts = kwargs.pop("show_layouts", True)
         show_table_structure = kwargs.pop("show_table_structure", True)
         show_words = kwargs.pop("show_words", False)
+        show_token_class = kwargs.pop("show_token_class", True)
+        ignore_default_token_class = kwargs.pop("ignore_default_token_class", False)
 
         df_gt = self.dataset.dataflow.build(**kwargs)
         df_pr = self.dataset.dataflow.build(**kwargs)
@@ -321,18 +322,21 @@ class Evaluator:
                 show_layouts=show_layouts,
                 show_table_structure=show_table_structure,
                 show_words=show_words,
+                show_token_class=show_token_class,
+                ignore_default_token_class=ignore_default_token_class,
             ), dp_pred.viz(
                 show_tables=show_tables,
                 show_layouts=show_layouts,
                 show_table_structure=show_table_structure,
                 show_words=show_words,
+                show_token_class=show_token_class,
+                ignore_default_token_class=ignore_default_token_class,
             )
             img_concat = np.concatenate((img_gt, img_pred), axis=1)
             if interactive:
                 interactive_imshow(img_concat)
             else:
-                return img_concat
-        return None
+                yield img_concat
 
 
 class WandbTableAgent:
@@ -350,7 +354,7 @@ class WandbTableAgent:
 
     def __init__(
         self,
-        wandb_run: "wandb.sdk.wandb_run.Run",
+        wandb_run: wandb.sdk.wandb_run.Run,
         dataset_name: str,
         num_samples: int,
         categories: Mapping[str, TypeOrStr],
@@ -409,7 +413,7 @@ class WandbTableAgent:
         self._table_rows = []
         self._counter = 0
 
-    def _build_table(self) -> "Table":
+    def _build_table(self) -> Table:
         """
         Builds wandb.Table object for logging evaluation
 

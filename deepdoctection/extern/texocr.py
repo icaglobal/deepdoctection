@@ -23,14 +23,16 @@ import sys
 import traceback
 from typing import List
 
+from lazy_imports import try_import
+
 from ..datapoint.convert import convert_np_array_to_b64_b
 from ..utils.detection_types import ImageType, JsonDict, Requirement
-from ..utils.file_utils import boto3_available, get_boto3_requirement
+from ..utils.file_utils import get_boto3_requirement
 from ..utils.logger import LoggingRecord, logger
 from ..utils.settings import LayoutType, ObjectTypes
 from .base import DetectionResult, ObjectDetector, PredictorBase
 
-if boto3_available():
+with try_import() as import_guard:
     import boto3  # type:ignore
 
 
@@ -120,6 +122,8 @@ class TextractOcrDetector(ObjectDetector):
         :param credentials_kwargs: `aws_access_key_id`, `aws_secret_access_key` or `aws_session_token`
         """
         self.name = "textract"
+        self.model_id = self.get_model_id()
+
         self.text_lines = text_lines
         self.client = boto3.client("textract", **credentials_kwargs)
         if self.text_lines:

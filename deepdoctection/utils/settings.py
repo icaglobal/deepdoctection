@@ -65,6 +65,7 @@ class PageType(ObjectTypes):
 
     document_type = "document_type"
     language = "language"
+    angle = "angle"
 
 
 @object_types_registry.register("SummaryType")
@@ -292,6 +293,7 @@ class DatasetType(ObjectTypes):
     sequence_classification = "sequence_classification"
     token_classification = "token_classification"
     publaynet = "publaynet"
+    default = "default"
 
 
 _TOKEN_AND_TAG_TO_TOKEN_CLASS_WITH_TAG = {

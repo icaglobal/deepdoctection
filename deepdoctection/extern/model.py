@@ -185,25 +185,6 @@ class ModelCatalog:
             dl_library="TF",
             model_wrapper="TPFrcnnDetector",
         ),
-        "layout/d2_model-800000-layout.pkl": ModelProfile(
-            name="layout/d2_model-800000-layout.pkl",
-            description="Detectron2 layout detection model trained on Publaynet",
-            config="dd/d2/layout/CASCADE_RCNN_R_50_FPN_GN.yaml",
-            size=[274568239],
-            tp_model=False,
-            hf_repo_id="deepdoctection/d2_casc_rcnn_X_32xd4_50_FPN_GN_2FC_publaynet_inference_only",
-            hf_model_name="d2_model-800000-layout.pkl",
-            hf_config_file=["Base-RCNN-FPN.yaml", "CASCADE_RCNN_R_50_FPN_GN.yaml"],
-            categories={
-                "1": LayoutType.text,
-                "2": LayoutType.title,
-                "3": LayoutType.list,
-                "4": LayoutType.table,
-                "5": LayoutType.figure,
-            },
-            dl_library="PT",
-            model_wrapper="D2FrcnnDetector",
-        ),
         "layout/d2_model_0829999_layout_inf_only.pt": ModelProfile(
             name="layout/d2_model_0829999_layout_inf_only.pt",
             description="Detectron2 layout detection model trained on Publaynet",
@@ -261,19 +242,6 @@ class ModelCatalog:
             dl_library="PT",
             model_wrapper="D2FrcnnTracingDetector",
         ),
-        "cell/d2_model-1800000-cell.pkl": ModelProfile(
-            name="cell/d2_model-1800000-cell.pkl",
-            description="Detectron2 cell detection inference only model trained on Pubtabnet",
-            config="dd/d2/cell/CASCADE_RCNN_R_50_FPN_GN.yaml",
-            size=[274519039],
-            tp_model=False,
-            hf_repo_id="deepdoctection/d2_casc_rcnn_X_32xd4_50_FPN_GN_2FC_pubtabnet_c_inference_only",
-            hf_model_name="d2_model-1800000-cell.pkl",
-            hf_config_file=["Base-RCNN-FPN.yaml", "CASCADE_RCNN_R_50_FPN_GN.yaml"],
-            categories={"1": LayoutType.cell},
-            dl_library="PT",
-            model_wrapper="D2FrcnnDetector",
-        ),
         "cell/d2_model_1849999_cell_inf_only.pt": ModelProfile(
             name="cell/d2_model_1849999_cell_inf_only.pt",
             description="Detectron2 cell detection inference only model trained on Pubtabnet",
@@ -310,19 +278,6 @@ class ModelCatalog:
             hf_model_name="cell/d2_model_1849999_cell.pth",
             hf_config_file=["Base-RCNN-FPN.yaml", "CASCADE_RCNN_R_50_FPN_GN.yaml"],
             categories={"1": LayoutType.cell},
-            dl_library="PT",
-            model_wrapper="D2FrcnnDetector",
-        ),
-        "item/d2_model-1620000-item.pkl": ModelProfile(
-            name="item/d2_model-1620000-item.pkl",
-            description="Detectron2 item detection inference only model trained on Pubtabnet",
-            config="dd/d2/item/CASCADE_RCNN_R_50_FPN_GN.yaml",
-            size=[274531339],
-            tp_model=False,
-            hf_repo_id="deepdoctection/d2_casc_rcnn_X_32xd4_50_FPN_GN_2FC_pubtabnet_rc_inference_only",
-            hf_model_name="d2_model-1620000-item.pkl",
-            hf_config_file=["Base-RCNN-FPN.yaml", "CASCADE_RCNN_R_50_FPN_GN.yaml"],
-            categories={"1": LayoutType.row, "2": LayoutType.column},
             dl_library="PT",
             model_wrapper="D2FrcnnDetector",
         ),
@@ -364,6 +319,45 @@ class ModelCatalog:
             categories={"1": LayoutType.row, "2": LayoutType.column},
             dl_library="PT",
             model_wrapper="D2FrcnnTracingDetector",
+        ),
+        "nielsr/lilt-xlm-roberta-base/pytorch_model.bin": ModelProfile(
+            name="nielsr/lilt-xlm-roberta-base/pytorch_model.bin",
+            description="LiLT build with a RobertaXLM base model",
+            config="nielsr/lilt-xlm-roberta-base/config.json",
+            size=[1136743583],
+            tp_model=False,
+            hf_repo_id="nielsr/lilt-xlm-roberta-base",
+            hf_model_name="pytorch_model.bin",
+            hf_config_file=["config.json"],
+            dl_library="PT",
+        ),
+        "SCUT-DLVCLab/lilt-infoxlm-base/pytorch_model.bin": ModelProfile(
+            name="SCUT-DLVCLab/lilt-infoxlm-base/pytorch_model.bin",
+            description="Language-Independent Layout Transformer - InfoXLM model by stitching a pre-trained InfoXLM"
+            " and a pre-trained Language-Independent Layout Transformer (LiLT) together. It was introduced"
+            " in the paper LiLT: A Simple yet Effective Language-Independent Layout Transformer for"
+            " Structured Document Understanding by Wang et al. and first released in this repository.",
+            config="SCUT-DLVCLab/lilt-infoxlm-base/config.json",
+            size=[1136743583],
+            tp_model=False,
+            hf_repo_id="SCUT-DLVCLab/lilt-infoxlm-base",
+            hf_model_name="pytorch_model.bin",
+            hf_config_file=["config.json"],
+            dl_library="PT",
+        ),
+        "SCUT-DLVCLab/lilt-roberta-en-base/pytorch_model.bin": ModelProfile(
+            name="SCUT-DLVCLab/lilt-roberta-en-base/pytorch_model.bin",
+            description="Language-Independent Layout Transformer - RoBERTa model by stitching a pre-trained RoBERTa"
+            " (English) and a pre-trained Language-Independent Layout Transformer (LiLT) together. It was"
+            " introduced in the paper LiLT: A Simple yet Effective Language-Independent Layout Transformer"
+            " for Structured Document Understanding by Wang et al. and first released in this repository.",
+            config="SCUT-DLVCLab/lilt-roberta-en-base/config.json",
+            size=[523151519],
+            tp_model=False,
+            hf_repo_id="SCUT-DLVCLab/lilt-roberta-en-base",
+            hf_model_name="pytorch_model.bin",
+            hf_config_file=["config.json"],
+            dl_library="PT",
         ),
         "microsoft/layoutlm-base-uncased/pytorch_model.bin": ModelProfile(
             name="microsoft/layoutlm-base-uncased/pytorch_model.bin",
@@ -534,6 +528,19 @@ class ModelCatalog:
             dl_library="TF",
             model_wrapper="DoctrTextRecognizer",
             architecture="crnn_vgg16_bn",
+        ),
+        "FacebookAI/xlm-roberta-base": ModelProfile(
+            name="FacebookAI/xlm-roberta-base/pytorch_model.bin",
+            description="XLM-RoBERTa model pre-trained on 2.5TB of filtered CommonCrawl data containing 100 languages."
+            " It was introduced in the paper Unsupervised Cross-lingual Representation Learning at Scale"
+            " by Conneau et al. and first released in this repository.",
+            size=[1115590446],
+            tp_model=False,
+            config="FacebookAI/xlm-roberta-base/config.json",
+            hf_repo_id="FacebookAI/xlm-roberta-base",
+            hf_model_name="pytorch_model.bin",
+            hf_config_file=["config.json"],
+            dl_library="PT",
         ),
         "fasttext/lid.176.bin": ModelProfile(
             name="fasttext/lid.176.bin",
@@ -980,9 +987,11 @@ class ModelDownloadManager:
                 else:
                     file_names.append(model_name)
             if profile.hf_repo_id:
-                ModelDownloadManager.load_model_from_hf_hub(profile, absolute_path_weights, file_names)
+                if not os.path.isfile(absolute_path_weights):
+                    ModelDownloadManager.load_model_from_hf_hub(profile, absolute_path_weights, file_names)
                 absolute_path_configs = ModelCatalog.get_full_path_configs(name)
-                ModelDownloadManager.load_configs_from_hf_hub(profile, absolute_path_configs)
+                if not os.path.isfile(absolute_path_configs):
+                    ModelDownloadManager.load_configs_from_hf_hub(profile, absolute_path_configs)
             else:
                 ModelDownloadManager._load_from_gd(profile, absolute_path_weights, file_names)
 

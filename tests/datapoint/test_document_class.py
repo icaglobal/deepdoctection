@@ -1,4 +1,4 @@
-"""Test module for Document class in the datapoint.view module"""
+""" Test module for Document class in the datapoint.view module """
 
 import sys
 import pytest
@@ -6,10 +6,30 @@ import pytest
 sys.path.insert(0, "/home/ec2-user/SageMaker/deepdoctection/")
 
 from deepdoctection.datapoint.view import Document
-from detect import get_pages_for_testing
+from detect import get_document_pages
 
-pages = get_pages_for_testing()
-document = Document.from_pages(pages)
+files_folder = "test_files_multipage"
+paragraph_file_name = "test_file_paragraph.pdf"
+table_file_name = "test_file_table.pdf"
+
+pages_for_paragraph = get_document_pages(
+    files_folder, paragraph_file_name
+)  # Get page dataflow list from the multi-paged paragraph test file
+pages_for_table = get_document_pages(
+    files_folder, table_file_name
+)  # Get page dataflow list from the multi-paged table test file
+
+document = Document.from_pages(
+    pages_for_paragraph
+)  # Document class instance object to test the individual (protected) methods
+
+document_for_paragraph = Document.from_pages(
+    pages_for_paragraph
+)  # Document class instance object to specifically test for multi-paged paragraph
+document_for_table = Document.from_pages(
+    pages_for_table
+)  # Document class instance object to specifically test for multi-paged tables
+
 
 def test_is_there_table():
     # test cases with table_len = 3, 0, -1
@@ -120,7 +140,9 @@ def test_is_paragraph_in_table():
     }  # Sample paragraph bounding box that falls outside the table bbox
 
     assert document._is_paragraph_in_table(paragraph_bbox, table_bboxes) == True
-    assert document._is_paragraph_in_table(paragraph_bbox_outside, table_bboxes) == False
+    assert (
+        document._is_paragraph_in_table(paragraph_bbox_outside, table_bboxes) == False
+    )
 
 
 def test_get_page_table_data():
@@ -132,7 +154,10 @@ def test_get_page_table_data():
         {"page_num": 2, "page_name": "eucalps"},
     ]
     expected_metadata_two = {"page_num": 21, "page_name": "bird"}
-    assert document._get_page_table_data(page_metadata_list, page_num) == expected_metadata_two
+    assert (
+        document._get_page_table_data(page_metadata_list, page_num)
+        == expected_metadata_two
+    )
     page_num = 4
     assert document._get_page_table_data(page_metadata_list, page_num) is None
 
@@ -141,14 +166,28 @@ def test_delete_processed_data():
     # Define test data
     unique_id = 403.44000000000005
     page_metadata_list = [
-        {"bbox": {"x1": 253.45, "y1": 129.24, "x2": 10.9, "y2": 228.15}, "page_name": "micron"},
-        {"bbox": {"x1": 243.15, "y1": 159.04, "x2": 9.19, "y2": 298.35}, "page_name": "bird"},
-        {"bbox": {"x1": 53.25, "y1": 119.04, "x2": 12.9, "y2": 218.25}, "page_name": "eucalps"},
+        {
+            "bbox": {"x1": 253.45, "y1": 129.24, "x2": 10.9, "y2": 228.15},
+            "page_name": "micron",
+        },
+        {
+            "bbox": {"x1": 243.15, "y1": 159.04, "x2": 9.19, "y2": 298.35},
+            "page_name": "bird",
+        },
+        {
+            "bbox": {"x1": 53.25, "y1": 119.04, "x2": 12.9, "y2": 218.25},
+            "page_name": "eucalps",
+        },
     ]
     expected_metadata = [
-        {"bbox": {"x1": 253.45, "y1": 129.24, "x2": 10.9, "y2": 228.15}, "page_name": "micron"},
-        {"bbox": {"x1": 243.15, "y1": 159.04, "x2": 9.19, "y2": 298.35}, "page_name": "bird"},
-        
+        {
+            "bbox": {"x1": 253.45, "y1": 129.24, "x2": 10.9, "y2": 228.15},
+            "page_name": "micron",
+        },
+        {
+            "bbox": {"x1": 243.15, "y1": 159.04, "x2": 9.19, "y2": 298.35},
+            "page_name": "bird",
+        },
     ]
     assert (
         document._delete_processed_data(page_metadata_list, unique_id)
@@ -185,3 +224,27 @@ def test_is_close_to_header():
 
     # Perform assertion to check if the result matches the expected outcome
     assert result == (lower_y_coord < header_height)
+
+
+def test_detect_multi_page_entities():
+
+    multi_page_text = document_for_paragraph.detect_multi_page_entities()
+
+    assert "text" in multi_page_text
+    assert multi_page_text["text"] is not None
+    assert (
+        multi_page_text["text"]["0"][0]["text"]
+        == "Whether you're registered for in-person attendance at the June 4 Wellness Symposium or not, you can join us for a welcome message from CDRH Center Director Jeff Shuren and Senior Leadership, followed by a keynote address from Jeff Vargas, president, and CEO of Generationology LLC, onintergenerational connections"
+    )
+    assert (
+        multi_page_text["text"]["0"][1]["text"]
+        == "in the workplace. Learn how to enhance, expand, and leverage individual skills to unleash the full potential of teams."
+    )
+
+    """
+    # This would be completed when the model detects table on the test file accurately
+
+    multi_page_table = document_for_table.detect_multi_page_entities()
+    assert "table" in multi_page_table
+    assert multi_page_text["table"] is not None
+    """

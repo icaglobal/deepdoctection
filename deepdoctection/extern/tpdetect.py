@@ -25,16 +25,14 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Union
 
 from ..utils.detection_types import ImageType, Requirement
-from ..utils.file_utils import get_tensorflow_requirement, get_tensorpack_requirement, tensorpack_available
+from ..utils.file_utils import get_tensorflow_requirement, get_tensorpack_requirement
 from ..utils.metacfg import set_config_by_yaml
 from ..utils.settings import ObjectTypes, TypeOrStr, get_type
 from .base import DetectionResult, ObjectDetector, PredictorBase
-
-if tensorpack_available():
-    from .tp.tpcompat import TensorpackPredictor
-    from .tp.tpfrcnn.config.config import model_frcnn_config
-    from .tp.tpfrcnn.modeling.generalized_rcnn import ResNetFPNModel
-    from .tp.tpfrcnn.predict import tp_predict_image
+from .tp.tpcompat import TensorpackPredictor
+from .tp.tpfrcnn.config.config import model_frcnn_config
+from .tp.tpfrcnn.modeling.generalized_rcnn import ResNetFPNModel
+from .tp.tpfrcnn.predict import tp_predict_image
 
 
 class TPFrcnnDetectorMixin(ObjectDetector, ABC):
@@ -69,6 +67,11 @@ class TPFrcnnDetectorMixin(ObjectDetector, ABC):
         categories = {str(key): get_type(categories[val]) for key, val in enumerate(categories, 1)}
         categories["0"] = get_type("background")
         return categories  # type: ignore
+
+    @staticmethod
+    def get_name(path_weights: str, architecture: str) -> str:
+        """Returns the name of the model"""
+        return f"Tensorpack_{architecture}" + "_".join(Path(path_weights).parts[-2:])
 
 
 class TPFrcnnDetector(TensorpackPredictor, TPFrcnnDetectorMixin):
@@ -122,8 +125,8 @@ class TPFrcnnDetector(TensorpackPredictor, TPFrcnnDetectorMixin):
         :param filter_categories: The model might return objects that are not supposed to be predicted and that should
                                   be filtered. Pass a list of category names that must not be returned
         """
-        self.name = "_".join(Path(path_weights).parts[-3:])
         self.path_yaml = path_yaml
+
         self.categories = copy(categories)  # type: ignore
         self.config_overwrite = config_overwrite
         if filter_categories:
@@ -132,7 +135,9 @@ class TPFrcnnDetector(TensorpackPredictor, TPFrcnnDetectorMixin):
         model = TPFrcnnDetector.get_wrapped_model(path_yaml, self.categories, config_overwrite)
         TensorpackPredictor.__init__(self, model, path_weights, ignore_mismatch)
         TPFrcnnDetectorMixin.__init__(self, categories, filter_categories)
-        assert self._number_gpus > 0, "Model only support inference with GPU"
+
+        self.name = self.get_name(path_weights, self._model.cfg.TAG)
+        self.model_id = self.get_model_id()
 
     @staticmethod
     def get_wrapped_model(
