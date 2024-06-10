@@ -1,10 +1,11 @@
 import deepdoctection as dd
 from deepdoctection.pipe.form import FormHandler
 from pypdf import PdfReader
+import re
 
 path = '../pdf/normal.pdf'
-path = '../pdf/estar.pdf'
-path = '../pdf/acroform.pdf'
+path = '../pdf/estar_nivd.pdf'
+#path = '../pdf/acroform.pdf'
 
 #analyzer = dd.get_dd_analyzer()
 #df = analyzer.analyze(path=path)
@@ -12,6 +13,4 @@ path = '../pdf/acroform.pdf'
 #pdf = analyzer.pdf_reader
 
 pdf = PdfReader(open(path, 'rb'))
-
-af = FormHandler(pdf)
-print(af.result)
+fh = FormHandler(pdf)
