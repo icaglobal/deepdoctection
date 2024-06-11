@@ -14,3 +14,7 @@ path = '../pdf/estar_nivd.pdf'
 
 pdf = PdfReader(open(path, 'rb'))
 fh = FormHandler(pdf)
+for fn, info in fh.attachments.items():
+    print(fn)
+    print(info)
+    print()
