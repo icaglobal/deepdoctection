@@ -3,29 +3,28 @@ from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdftypes import resolve1
 import xml.etree.ElementTree as ET
 import re
-import json
 
 
 class AcroFormHandler:
-    def __init__(self, acroform):
-        self.data = self.process_acroform()
+    def __init__(self, pdf):
+        self.data = self.process_acroform(pdf)
 
-    def process_acroform(self):
-        fields = self._pdf.get_fields()
+    def process_acroform(self, pdf):
+        fields = pdf.get_fields()
         t_fields = {}
         for key, val in fields.items():
             t_fields[key] = {
                 "section": None,
                 "field_name": key,
                 "name": val['/T'],
-                "name_tag": None if '/V' not in val.keys() else val['/V'],
+                "name_tag": None,
             }
 
         result = {
             "tot_columns": len(fields),
             "column_names": list(fields.keys()),
             't_fields': t_fields,
-            "cell_values": None,
+            "cell_values": {v['/T']: None if '/V' not in v.keys() else v['/V'] for v in fields.values()},
         }
         return result
 
@@ -208,7 +207,7 @@ class XFAHandler:
         """
 
         # Get fields from template namespace
-        t_fields = self.get_fields_from_template()
+        t_fields = self.get_fields_from_template(elem=None)
 
         # Get form values from dataset namespace
         d_fields = self.get_fields_from_dataset(t_fields)
@@ -229,7 +228,7 @@ class XFAHandler:
             "tot_columns": len(column_names),
             "column_names": column_names,
             't_fields': t_fields,
-            "cell_values": json.dumps(cell_values),
+            "cell_values": cell_values,
             # "bucket_name": bucket,
             # "object_key": doc_id,
         }
@@ -266,7 +265,7 @@ class FormHandler:
 
             elif 'Fields' in acroform.keys():
                 self.formtype = 'AcroForm'
-                form = AcroFormHandler(acroform)
+                form = AcroFormHandler(pdf)
                 self.data = form.data
 
     def get_attachments(self, pdf):
@@ -274,15 +273,14 @@ class FormHandler:
         Should apply to all PDFs
         """
         result = {}
-        catalog = pdf.trailer['/Root']
-        self.catalog = catalog
-        if '/Names' in catalog.keys() and '/EmbeddedFiles' in catalog['/Names'].keys():
-            attachments = None if '/Names' not in catalog['/Names']['/EmbeddedFiles'].keys() else [x for n, x in
-                                                                                                   enumerate(catalog[
-                                                                                                                 '/Names'][
-                                                                                                                 '/EmbeddedFiles'][
-                                                                                                                 '/Names'])
-                                                                                                   if n % 2 == 1]
+        pdf_root = pdf.trailer['/Root']
+        if '/Names' in pdf_root.keys() and '/EmbeddedFiles' in pdf_root['/Names'].keys():
+            attachments = None if '/Names' not in pdf_root['/Names']['/EmbeddedFiles'].keys() else [x for n, x in
+                                                                                                    enumerate(pdf_root[
+                                                                                                                  '/Names'][
+                                                                                                                  '/EmbeddedFiles'][
+                                                                                                                  '/Names'])
+                                                                                                    if n % 2 == 1]
             for item in attachments:
                 filespec = item.get_object()
                 fn = filespec['/F']
@@ -304,7 +302,7 @@ class FormHandler:
         """
         Hopefully applies to all XFAs but may apply only to eSTAR
         """
-        manifest = self.result['t_fields']['AttachmentManifest']['value']
+        manifest = self.data['t_fields']['AttachmentManifest']['value']
         manifest_list = re.findall('<<(.+?)>>', manifest)
         for item in manifest_list:
             key, val = item.split('|')
