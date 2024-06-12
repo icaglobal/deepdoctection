@@ -21,8 +21,6 @@ class AcroFormHandler:
             }
 
         result = {
-            "tot_columns": len(fields),
-            "column_names": list(fields.keys()),
             't_fields': t_fields,
             "cell_values": {v['/T']: None if '/V' not in v.keys() else v['/V'] for v in fields.values()},
         }
@@ -224,14 +222,8 @@ class XFAHandler:
         }
 
         result = {
-            # "form_id": doc_id,
-            # "form_pages": pages,
-            "tot_columns": len(column_names),
-            "column_names": column_names,
             't_fields': t_fields,
             "cell_values": cell_values,
-            # "bucket_name": bucket,
-            # "object_key": doc_id,
         }
         return result
 
