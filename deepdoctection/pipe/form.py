@@ -97,6 +97,7 @@ class XFAHandler:
 
         I also don't know if the AttachmentManifest is generalizable to all XFA documents, but a boy can dream, can't he...
         """
+        result = {} if result is None else result
         elem = elem if elem is not None else self.xml_root.find(".//template:template", self.namespaces)
 
         tag_name = elem.tag.split("}")[-1]
