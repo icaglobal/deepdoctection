@@ -268,6 +268,6 @@ class FormHandler:
                 fn = filespec['/F']
                 pdf_bytes = filespec['/EF']['/F'].get_data()
                 desc = fn if '/Desc' not in filespec.keys() else filespec['/Desc']
-                # result[fn] = {'desc': desc, 'pdf_bytes': pdf_bytes}
-                result[fn] = {'desc': desc}
+                result[fn] = {'desc': desc, 'pdf_bytes': pdf_bytes}
         return result
+    
