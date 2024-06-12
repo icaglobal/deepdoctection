@@ -1,6 +1,6 @@
 from pdfminer.pdfparser import PDFParser
 from pdfminer.pdfdocument import PDFDocument
-from pdfminer.pdftypes import resolve1
+from pdfminer.pdftypes import resolve1, PDFObjRef
 import xml.etree.ElementTree as ET
 import re
 
@@ -256,7 +256,7 @@ class FormHandler:
                 # self.get_attachments_from_manifest()
                 self.label_attachments()
 
-            elif 'Fields' in acroform.keys():
+            elif 'Fields' in acroform.keys() and isinstance(acroform['Fields'], PDFObjRef):
                 self.formtype = 'AcroForm'
                 form = AcroFormHandler(pdf)
                 self.data = form.data
