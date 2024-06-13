@@ -14,3 +14,43 @@ DoctectionPipe.analyze
 			service?
 			method?
 	or should it just create another pipeline
+
+form.py:get_fields_from_template
+
+        As currently written, this function will not work on a generic (non-eSTAR) XFA document,
+        as it relies on the field names to contain certain information. However, it seems that
+        the data type of the field is contained as a subelement of the <ui> subelement. Here's
+        the list of all the <ui> subelements:
+            button
+            checkButton
+            choiceList
+            dateTimeEdit
+            imageEdit
+            numericEdit
+            signature
+            textEdit
+
+        And because it's not possible to rely on the word "attachment" being in the field name
+        that won't work going forward. However, it looks like there's always a <button> tag.
+        Here's the list of all of the subelements (all levels of the tree) of the eSTAR attachment
+        fields:
+            assist
+            bind
+            border
+            button
+            caption
+            color
+            edge
+            event
+            fill
+            font
+            para
+            script
+            speak
+            text
+            ui
+            value
+
+        The <script> tag is where I'm currently getting useful information about what section of
+        the document an attachment is attached to. I'm not sure where that sits in the hierarchy
+        under the <field> tag, but it's there somewhere.
