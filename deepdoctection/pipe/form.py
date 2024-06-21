@@ -3,69 +3,51 @@ from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdftypes import resolve1, PDFObjRef
 import xml.etree.ElementTree as ET
 import re
+from dataclasses import dataclass, field
+from typing import Dict, Union
 
 
-class FormHandler:
-    """Reads PDF forms (both XFA and AcroForm)
+@dataclass
+class FormField:
+    section:        str = None
+    field_name:     str = None
+    name:           str = None
+    name_tag:       str = None
+    items:          Dict[str, str] = field(default_factory=lambda: {})
+    value:          str = None
 
-    Uses PDFMiner to parse the PDF passing the file to the `XFAHandler` or  `AcroFormHandler`
-    classes as necessary to p[rocess the form data.
 
-    Given that PDFs without forms can have embedded files it's likely that the  `get_attachments`
-    function will be moved elsewhere or this class will be expanded to cover not just forms, but
-    all data structures embedded in a PDF. But today is not that day...
+@dataclass
+class FormObject:
+    type:           str = None
+    fields:         Dict[str, FormField] = field(default_factory=lambda: {})
 
-    The returned `data` dictionary currently holds two values:
-        t_fields : a list of all fields present in the form
-                    (initially developed in the XFA context...it may not be relevant for AcroForms
-                    and may be removed entirely)
-        cell_values : a dictionary of all fields and values present in the form
 
-    Parameters
-    ----------
+@dataclass
+class DoclevelObjects:
+    attachments:    Dict[str, Dict[str, Union[str, bytes]]] = field(default_factory=lambda: {})
+    form:           FormObject = None
 
-    pdf : pypdf.PdfReader
-        The PDF file in question
 
-    Returns
-    -------
-    _doc : pdfminer.pdfdocument.PDFDocument
-        The parsed PDFDocument
-    _catalog : pdfminer.pdfdocument.PDFDocument.catalog
-        The resolved document catalog object
-    formtype : string
-        One of 'AcroForm', 'XFA', or None
-    data : dict
-        The fields found on the form.
-    attachments : dict
-        All embedded attachments found in the form (see `get_attachments` for more details)
-    """
+def get_pdfdocument(pdf):
+    pdf_bytes = pdf.stream.raw
+    parser = PDFParser(pdf_bytes)
+    try:
+        result = PDFDocument(parser)
+    except:
+        result = None
 
+    return result
+
+
+class GetDoclevelObjects(DoclevelObjects):
     def __init__(self, pdf):
-        pdf_bytes = pdf.stream.raw
-        parser = PDFParser(pdf_bytes)
-        doc = PDFDocument(parser)
-        catalog = resolve1(doc.catalog)
-        self._doc = doc
-        self._catalog = catalog
-
-        self.formtype = None
-        self.data = None
         self.attachments = self.get_attachments(pdf)
-
-        # All forms, whether AcroForm or XFA, are contained in the 'AcroForm' element of the catalog
-        if 'AcroForm' in catalog.keys():
-            acroform = resolve1(catalog['AcroForm'])
-            # But only XFA data is contained in the 'XFA' subelement
-            if 'XFA' in acroform.keys():
-                self.formtype = 'XFA'
-                form = XFAHandler(acroform)
-                self.data = form.data
-            # The 'Fields' subelement holds AcroForm field data, if there is one
-            elif 'Fields' in acroform.keys() and isinstance(acroform['Fields'], PDFObjRef):
-                self.formtype = 'AcroForm'
-                form = AcroFormHandler(pdf)
-                self.data = form.data
+        doc = get_pdfdocument(pdf)
+        if doc is not None:
+            catalog = resolve1(doc.catalog)
+            if 'AcroForm' in catalog.keys():
+                self.form = FormHandler(pdf)
 
     def get_attachments(self, pdf):
         """Read embedded files from PDF
@@ -122,48 +104,65 @@ class FormHandler:
         return result
 
 
-class AcroFormHandler:
-    """Read data from AcroForm objects
+class FormHandler(FormObject):
+    """Reads PDF forms (both XFA and AcroForm)
+
+    Uses PDFMiner to parse the PDF passing the file to the `XFAHandler` or  `AcroFormHandler`
+    classes as necessary to process the form data.
+
+    Given that PDFs without forms can have embedded files it's likely that the  `get_attachments`
+    function will be moved elsewhere or this class will be expanded to cover not just forms, but
+    all data structures embedded in a PDF. But today is not that day...
+
+    The returned `data` dictionary currently holds two values:
+        t_fields : a list of all fields present in the form
+                    (initially developed in the XFA context...it may not be relevant for AcroForms
+                    and may be removed entirely)
+        cell_values : a dictionary of all fields and values present in the form
 
     Parameters
     ----------
 
-    pdf : pypdf.PdfReader object
+    pdf : pypdf.PdfReader
         The PDF file in question
 
     Returns
     -------
-
-    result: dict
-        A dictionary with the following structure:
-            {
-                't_fields': List of all fields in template,
-                'cell_values': A key : value listing of all fields in the form, both with and without data
-            }
+    formtype : string
+        One of 'AcroForm', 'XFA', or None
+    data : dict
+        The fields found on the form.
+    attachments : dict
+        All embedded attachments found in the form (see `get_attachments` for more details)
     """
 
     def __init__(self, pdf):
-        self.data = self.process_acroform(pdf)
+        doc = get_pdfdocument(pdf)
+        if doc is not None:
+            catalog = resolve1(doc.catalog)
+            # All forms, whether AcroForm or XFA, are contained in the 'AcroForm' element of the catalog
+            if 'AcroForm' in catalog.keys():
+                acroform = resolve1(catalog['AcroForm'])
+                # But only XFA data is contained in the 'XFA' subelement
+                if 'XFA' in acroform.keys():
+                    self.type = 'XFA'
+                    xfa = XFAHandler(acroform)
+                    self.fields = xfa.fields
+
+                # The 'Fields' subelement holds AcroForm field data, if there is one
+                elif 'Fields' in acroform.keys() and isinstance(acroform['Fields'], PDFObjRef):
+                    self.type = 'AcroForm'
+                    self.fields = {}
+                    self.process_acroform(pdf)
 
     def process_acroform(self, pdf):
-        fields = pdf.get_fields()
-        t_fields = {}
-        for key, val in fields.items():
-            t_fields[key] = {
-                "section": None,
-                "field_name": key,
-                "name": val['/T'],
-                "name_tag": None,
-            }
-
-        result = {
-            't_fields': t_fields,
-            "cell_values": {v['/T']:None if '/V' not in v.keys() else v['/V'] for v in fields.values()},
-        }
-        return result
+        for key, val in pdf.get_fields().items():
+            self.fields[key] = FormField(field_name=key,
+                                         name=val['/T'],
+                                         value=None if '/V' not in val.keys() else val['/V'])
 
 
-class XFAHandler:
+class XFAHandler(FormObject):
     """Read data from XFA objects
 
     Parameters
@@ -175,20 +174,22 @@ class XFAHandler:
     Returns
     -------
 
-    result: dict
-        A dictionary with the following structure:
-            {
-                't_fields': List of all fields in template,
-                'cell_values': key : value listing of all fields in the form
-            }
+        _xml_root: xml.etree.ElementTree
+
+        _namespaces: Dict
+        fields: FormData
     """
 
     def __init__(self, acroform):
         xfa = resolve1(acroform["XFA"])
-        self.xml_root = self.get_xfa_xml(xfa)
-        self.namespaces = self.get_namespaces()
-        self.data = None
-        self.data = self.process_xfa()
+        self._xml_root = self.get_xfa_xml(xfa)
+        self._namespaces = self.get_namespaces()
+
+        # Get fields from template namespace
+        self.fields = self.get_fields_from_template()
+
+        # Get form values from dataset namespace
+        self.get_fields_from_dataset()
 
     def get_xfa_xml(self, xfa):
         """Converts XFA XML embedded in a PDF to an XML root object
@@ -220,7 +221,7 @@ class XFAHandler:
             descr
         """
         namespaces = {}
-        for elem in list(self.xml_root):
+        for elem in list(self._xml_root):
             ns, tag = re.match(r'\{(.+)\}(.+)', elem.tag).groups()
             namespaces[tag] = ns
         return namespaces
@@ -246,15 +247,7 @@ class XFAHandler:
         -------
 
         result : Dict
-            {element name:
-                {
-                    "section": Dot-separated list of the tag names of the element's ancestors,
-                    "field_name": xml.etree.ElementTree.Element.attrib['name'],
-                    "name": Long descriptive name of field taken from caption or toolTip tags,
-                    "name_tag": The name of the tag where the fieldname was gathered,
-                    "items": Items found in a dropdown list (if the fields is a dropdown),
-                }
-            }
+            {element name: FormField}
             The name_tag field is probably superfluous, and it's being used to hold attachment
             metadata, which will probably be ultimately unnecessary
         """
@@ -262,7 +255,7 @@ class XFAHandler:
         result = {} if result is None else result
 
         # Begin at the template root element
-        elem = elem if elem is not None else self.xml_root.find(".//template:template", self.namespaces)
+        elem = elem if elem is not None else self._xml_root.find(".//template:template", self._namespaces)
 
         # Remove namespace from tag name
         tag_name = elem.tag.split("}")[-1]
@@ -290,7 +283,7 @@ class XFAHandler:
                 # This section will need to be ripped out and moved to the eSTAR wrapper
                 if re.search("addattachment", elem_name.lower()):
                     tag = 'script'
-                    cur = elem.find(f".//template:{tag}", self.namespaces)
+                    cur = elem.find(f".//template:{tag}", self._namespaces)
                     try:
                         cur = re.sub('[\n\r]+', '', cur.text)
                         name = re.match(r'.+\[AttachmentIndex\]\.path \+ "(.+?)"', cur).groups()[0]
@@ -302,6 +295,7 @@ class XFAHandler:
 
                 else:
                     name = ""
+                    name_tag = ""
                     # There are two tags (caption and toolTip) where the script looks for a
                     # descriptive field name
                     # This logic might be (probably is) eSTAR-specific as well
@@ -310,7 +304,7 @@ class XFAHandler:
                         "toolTip",
                     ]
                     for tag in name_tags:
-                        cur = elem.find(f".//template:{tag}", self.namespaces)
+                        cur = elem.find(f".//template:{tag}", self._namespaces)
                         if cur is not None:
                             if not len(
                                     name
@@ -321,48 +315,33 @@ class XFAHandler:
 
                 # save field metadata to dictionary
                 if len(name):
-                    result[elem_name] = {
-                        "section": parent,
-                        "field_name": elem_name,
-                        "name": name,
-                        "name_tag": name_tag,
-                    }
+                    result[elem_name] = FormField(section=parent,
+                                                  field_name=elem_name,
+                                                  name=name,
+                                                  name_tag=name_tag)
+
                     # parse dropdown list values, if necessary
-                    items = elem.findall(".//template:items", self.namespaces)
+                    items = elem.findall(".//template:items", self._namespaces)
                     if len(items) == 2:
-                        result[elem_name]["items"] = dict(
+                        result[elem_name].items = dict(
                             zip(list(items[1].itertext()), list(items[0].itertext()))
                         )
 
         # see if there are subelements and recurse into them if necessary
-        subs = elem.findall("*", self.namespaces)
+        subs = elem.findall("*", self._namespaces)
         if len(subs):
             for item in subs:
                 result = self.get_fields_from_template(item, result, parent)
         return result
 
-    def get_fields_from_dataset(self, fields):
+    def get_fields_from_dataset(self):
         """Reads the field list generated by get_fields_from_template(), finds each of the
         fields in the dataset namespace, and extracts the field value
-
-        Parameters
-        ----------
-
-        fields : dict
-            Output from self.get_fields_from_template()
-
-        Returns
-        -------
-
-        fields : dict
-            The input dictionary is simply modified by this function. If I'm going to do that
-            I should probably just make fields a class object so it doesn't have to be passed
-            around.
         """
         # Find the root XML for the datasets namespace
-        datasets = self.xml_root.find(".//datasets:datasets", self.namespaces)
+        datasets = self._xml_root.find(".//datasets:datasets", self._namespaces)
 
-        for field_name, field in fields.items():
+        for field_name, field in self.fields.items():
             # Loop through each field found in the template and find all instances of it in the
             # datasets namespace.
             elem = datasets.findall(f".//{field_name}")
@@ -373,55 +352,20 @@ class XFAHandler:
                     # Use item.text as the field value if the field is a dropdown list and the
                     # text is not in the list, otherwise use the dropdown value
                     if item.text is not None:
-                        if "items" in fields[field_name].keys() and len(
-                                fields[field_name]["items"].keys()
-                        ):
+                        if len(self.fields[field_name].items):
                             val = (
                                 item.text
-                                if item.text not in fields[field_name]["items"].keys()
-                                else fields[field_name]["items"][item.text]
+                                if item.text not in self.fields[field_name].items.keys()
+                                else self.fields[field_name].items[item.text]
                             )
                         else:
                             val = item.text
                         # If there are multiple values for a field append each new value for that
                         # field to a list, otherwise set the field value to whatever was determined
                         # above.
-                        if "value" in fields[field_name].keys():
-                            if not isinstance(fields[field_name]["value"], list):
-                                fields[field_name]["value"] = [fields[field_name]["value"]]
-                            fields[field_name]["value"].append(val)
+                        if self.fields[field_name].value is not None and len(self.fields[field_name].value):
+                            if not isinstance(self.fields[field_name].value, list):
+                                self.fields[field_name].value = [self.fields[field_name].value]
+                            self.fields[field_name].value.append(val)
                         else:
-                            fields[field_name]["value"] = val
-        return fields
-
-    def process_xfa(self):
-        """Extract all field information from an XFA file
-
-        Returns
-        -------
-
-        result: dict
-            A dictionary with the following structure:
-                {
-                    't_fields': List of all fields in template,
-                    'cell_values': A key : value listing of all fields in the form, both with and without data
-                }
-        """
-
-        # Get fields from template namespace
-        t_fields = self.get_fields_from_template()
-
-        # Get form values from dataset namespace
-        d_fields = self.get_fields_from_dataset(t_fields)
-
-        cell_values = {
-            f"{field['section']}.{field['name']}": field["value"]
-            for field in d_fields.values()
-            if "value" in field.keys()
-        }
-
-        result = {
-            't_fields': t_fields,
-            "cell_values": cell_values,
-        }
-        return result
+                            self.fields[field_name].value = val
