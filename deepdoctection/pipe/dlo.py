@@ -1,6 +1,3 @@
-from pdfminer.pdfparser import PDFParser
-from pdfminer.pdfdocument import PDFDocument
-from pdfminer.pdftypes import resolve1, PDFObjRef
 import xml.etree.ElementTree as ET
 import re
 from dataclasses import dataclass, field
@@ -10,10 +7,10 @@ from typing import Dict, Union
 @dataclass
 class FormField:
     section:        str = None
-    field_name:     str = None
-    name:           str = None
+    field_name:     str = None  # The field name contained in the XML tag
+    name:           str = None  # The human-readable field name derived from the caption or tooltip
     name_tag:       str = None
-    items:          Dict[str, str] = field(default_factory=lambda: {})
+    items:          Dict[str, str] = field(default_factory=lambda: {}) # For storage of dropdown list items
     value:          str = None
 
 
@@ -29,27 +26,36 @@ class DoclevelObjects:
     form:           FormObject = None
 
 
-def get_pdfdocument(pdf):
-    pdf_bytes = pdf.stream.raw
-    parser = PDFParser(pdf_bytes)
-    try:
-        result = PDFDocument(parser)
-    except:
-        result = None
-
-    return result
-
-
 class GetDoclevelObjects(DoclevelObjects):
-    def __init__(self, pdf):
-        self.attachments = self.get_attachments(pdf)
-        doc = get_pdfdocument(pdf)
-        if doc is not None:
-            catalog = resolve1(doc.catalog)
-            if 'AcroForm' in catalog.keys():
-                self.form = FormHandler(pdf)
+    """Extracts attachments and form data from a PDF
 
-    def get_attachments(self, pdf):
+        Parameters
+        ----------
+
+        pdf : pypdf.PdfReader object
+            The PDF file in question
+
+        Returns
+        -------
+
+        attachments: Dict
+
+        form: FormObject
+    """
+    def __init__(self, pdf):
+        catalog = pdf.trailer["/Root"]
+        self.attachments = self.get_attachments(catalog)
+        self.form = FormObject()
+        if '/AcroForm' in catalog.keys():
+            if not len(pdf.xfa):
+                self.form.type = 'AcroForm'
+                self.form.fields = self.process_acroform(pdf)
+            else:
+                xfa = XFAHandler(pdf)
+                self.form.type = xfa.type
+                self.form.fields = xfa.fields
+
+    def get_attachments(self, catalog):
         """Read embedded files from PDF
 
         Embedded file metadata is stored in a dictionary:
@@ -68,7 +74,7 @@ class GetDoclevelObjects(DoclevelObjects):
         Parameters
         ----------
 
-        pdf : pypdf.PdfReader object
+        catalog : PDF catalog
             The PDF file in question
 
         Returns
@@ -85,10 +91,9 @@ class GetDoclevelObjects(DoclevelObjects):
             }
         """
         result = {}
-        pdf_root = pdf.trailer['/Root']
         # Check if there are any embedded files
-        if '/Names' in pdf_root.keys() and '/EmbeddedFiles' in pdf_root['/Names'].keys():
-            embeds = pdf_root['/Names']['/EmbeddedFiles']
+        if '/Names' in catalog.keys() and '/EmbeddedFiles' in catalog['/Names'].keys():
+            embeds = catalog['/Names']['/EmbeddedFiles']
             # Sometimes there's an /EmbeddedFiles object even when there are none
             if '/Names' not in embeds.keys():
                 attachments = []
@@ -103,63 +108,13 @@ class GetDoclevelObjects(DoclevelObjects):
                 result[fn] = {'desc': desc, 'file_bytes': file_bytes}
         return result
 
-
-class FormHandler(FormObject):
-    """Reads PDF forms (both XFA and AcroForm)
-
-    Uses PDFMiner to parse the PDF passing the file to the `XFAHandler` or  `AcroFormHandler`
-    classes as necessary to process the form data.
-
-    Given that PDFs without forms can have embedded files it's likely that the  `get_attachments`
-    function will be moved elsewhere or this class will be expanded to cover not just forms, but
-    all data structures embedded in a PDF. But today is not that day...
-
-    The returned `data` dictionary currently holds two values:
-        t_fields : a list of all fields present in the form
-                    (initially developed in the XFA context...it may not be relevant for AcroForms
-                    and may be removed entirely)
-        cell_values : a dictionary of all fields and values present in the form
-
-    Parameters
-    ----------
-
-    pdf : pypdf.PdfReader
-        The PDF file in question
-
-    Returns
-    -------
-    formtype : string
-        One of 'AcroForm', 'XFA', or None
-    data : dict
-        The fields found on the form.
-    attachments : dict
-        All embedded attachments found in the form (see `get_attachments` for more details)
-    """
-
-    def __init__(self, pdf):
-        doc = get_pdfdocument(pdf)
-        if doc is not None:
-            catalog = resolve1(doc.catalog)
-            # All forms, whether AcroForm or XFA, are contained in the 'AcroForm' element of the catalog
-            if 'AcroForm' in catalog.keys():
-                acroform = resolve1(catalog['AcroForm'])
-                # But only XFA data is contained in the 'XFA' subelement
-                if 'XFA' in acroform.keys():
-                    self.type = 'XFA'
-                    xfa = XFAHandler(acroform)
-                    self.fields = xfa.fields
-
-                # The 'Fields' subelement holds AcroForm field data, if there is one
-                elif 'Fields' in acroform.keys() and isinstance(acroform['Fields'], PDFObjRef):
-                    self.type = 'AcroForm'
-                    self.fields = {}
-                    self.process_acroform(pdf)
-
     def process_acroform(self, pdf):
+        result = {}
         for key, val in pdf.get_fields().items():
-            self.fields[key] = FormField(field_name=key,
-                                         name=val['/T'],
-                                         value=None if '/V' not in val.keys() else val['/V'])
+            result[key] = FormField(field_name=key,
+                                    name=val['/T'],
+                                    value=None if '/V' not in val.keys() else val['/V'])
+        return result
 
 
 class XFAHandler(FormObject):
@@ -168,27 +123,24 @@ class XFAHandler(FormObject):
     Parameters
     ----------
 
-    acroform : pdfminer.pdfdocument.PDFDocument.catalog['AcroForm'] object
-        The AcroForm element of the PDF file in question
+    acroform : pypdf.PdfReader object
+        The PDF file in question
 
     Returns
     -------
 
         _xml_root: xml.etree.ElementTree
-
         _namespaces: Dict
+        type: String
         fields: FormData
     """
 
-    def __init__(self, acroform):
-        xfa = resolve1(acroform["XFA"])
+    def __init__(self, pdf):
+        xfa = pdf.xfa
         self._xml_root = self.get_xfa_xml(xfa)
         self._namespaces = self.get_namespaces()
-
-        # Get fields from template namespace
+        self.type = 'XFA'
         self.fields = self.get_fields_from_template()
-
-        # Get form values from dataset namespace
         self.get_fields_from_dataset()
 
     def get_xfa_xml(self, xfa):
@@ -197,7 +149,7 @@ class XFAHandler(FormObject):
         Parameters
         ----------
 
-        xfa : Resolved pdfminer.pdfdocument.PDFDocument.catalog['AcroForm']['XFA'] object
+        xfa : pypdf.PdfReader.xfa object
 
         Returns
         -------
@@ -206,7 +158,7 @@ class XFAHandler(FormObject):
         """
         # The Adobe XFA XML is contained in a list in which the XML is only in the odd-numbered
         # list elements
-        objs = [resolve1(x).get_data().decode() for n, x in enumerate(xfa) if n % 2 == 1]
+        objs = [i.decode() for i in xfa.values()]
         xstr = "".join(objs)
         root = ET.fromstring(xstr)
         return root
