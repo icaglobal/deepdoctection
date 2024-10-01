@@ -4,6 +4,8 @@ from pdfminer.pdftypes import resolve1
 import xml.etree.ElementTree as ET
 import re
 import json
+import io
+import hashlib
 
 class FormHandler:
     """
@@ -14,7 +16,10 @@ class FormHandler:
     3) The objects currently being put into the result object are 
     """
     def __init__(self, pdf):
-        pdf_bytes = pdf.stream.raw
+        try:
+            pdf_bytes = pdf.stream.raw
+        except:
+            pdf_bytes = pdf.stream
         parser = PDFParser(pdf_bytes)
         doc = PDFDocument(parser)
         catalog = resolve1(doc.catalog)
@@ -75,31 +80,66 @@ class FormHandler:
             else:
                 self.attachments[fn]['section'] = cur['section']
 
+    def calculate_s3_etag(self, streaming_body, chunk_size=8 * 1024 * 1024):
+        md5s = []
+
+        # Read the streaming body in chunks
+        for chunk in iter(lambda: streaming_body.read(chunk_size), b''):
+            md5s.append(hashlib.md5(chunk))
+
+        # If the file is small (only one chunk), return its MD5 hash
+        if len(md5s) == 1:
+            return f'"{md5s[0].hexdigest()}"'
+        else:
+            # For multipart uploads, combine all chunk hashes
+            md5_digests = [i.digest() for i in md5s]
+            combined_md5 = hashlib.md5(b''.join(md5_digests)).hexdigest()
+            # sometimes weird stuff happens tho
+            if not len(md5_digests):
+                return f'"{combined_md5}"'
+            else:
+                return f'"{combined_md5}-{len(md5_digests)}"'
+
+
+    def get_attachments(self, obj):
+        return [x for n, x in enumerate(obj['/Names']) if n % 2 == 1]
+
+
     def get_attachments_from_catalog(self):
         """
         Should apply to all PDFs
         """
         result = {}
         catalog = self._pdf.trailer['/Root']
-        attachments = [x for n, x in enumerate(catalog['/Names']['/EmbeddedFiles']['/Names']) if n % 2 == 1]
+        embeds = catalog['/Names']['/EmbeddedFiles']
+        attachments = []
+        if '/Kids' in embeds.keys():
+            for item in embeds['/Kids']:
+                attachments.extend(self.get_attachments(item))
+        elif '/Names' in embeds.keys():
+            attachments.extend(self.get_attachments(embeds))
         for item in attachments:
             filespec = item.get_object()
             desc = None if '/Desc' not in filespec.keys() else filespec['/Desc']
             fn = filespec['/F']
             pdf_bytes = filespec['/EF']['/F'].get_data()
-            #result[fn] = {'desc': desc, 'pdf_bytes': pdf_bytes}
-            result[fn] = {'desc': desc}
+            result[fn] = {'desc': desc, 'e_tag': self.calculate_s3_etag(io.BytesIO(pdf_bytes))}
+            
         return result
 
     def get_attachments_from_xml(self):
         subforms = self.xml.findall('.//form:subform', self.namespaces)
         for item in subforms:
             if re.search('attachment', item.attrib['name'].lower()) and re.match(f"{{{self.namespaces['form']}}}subform", item.tag):
-                fn = item.find('.//form:text', self.namespaces)
+                field_name = item.attrib['name']
+                # fn = item.find('.//form:text', self.namespaces) # possibly obsoleted by line below
+                fn = item.find("./form:draw[@name='AttachmentName']//form:text", self.namespaces)
                 filename = None if fn is None else fn.text
-                section = self.d_fields[item.attrib['name']]['section']
+                section = self.d_fields[field_name]['section']
                 if filename in self.attachments.keys():
                     self.attachments[filename]['section'] = section
+                # else:
+                #     self.attachments[filename] = {'section': section}
 
     def get_attachments_from_manifest(self):
         """
